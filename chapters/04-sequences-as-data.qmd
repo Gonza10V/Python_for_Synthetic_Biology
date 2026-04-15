@@ -1,18 +1,1092 @@
 # Sequences as Data
 
-## Draft focus
+Synthetic biology begins with physical molecules, but computational work usually begins with **representations**.
 
-Show how DNA, RNA, and protein sequences can be represented, transformed, and annotated in Python.
+A DNA construct in the freezer is a physical object. A GenBank file, a FASTA entry, or a short Python string is a representation of that object. The representation is not the biology itself, but it is what our software can inspect, transform, compare, and store.
 
-## Starter example
+That is why sequence handling is one of the first real computational skills in synthetic biology. If you can represent sequences cleanly in Python, you can begin to automate many common tasks:
+
+- checking whether a design contains a forbidden restriction site
+- computing GC content
+- finding open reading frames
+- converting DNA to RNA
+- translating coding sequences into protein sequences
+- scanning a small library of candidate parts
+- reading sequence files and summarizing them automatically
+
+This chapter is about learning to think of sequences as **data structures** rather than only as strings typed into a document.
+
+We will stay deliberately concrete. By the end of the chapter, you will be able to write small, readable Python programs that manipulate DNA sequences in the way a working synthetic biology project often requires.
+
+## Sequences look like text, but they are structured text
+
+At first glance, a DNA sequence looks like ordinary text.
+
+```{python}
+sequence = "ATGCGTACCGTTAG"
+sequence
+```
+
+Python stores that value as a string. That is convenient, because strings already support many operations that are useful for biology.
+
+But a biological sequence is not arbitrary text. Each character has meaning, and the order matters. In DNA,
+
+- `A`, `T`, `G`, and `C` represent nucleotides
+- triplets can encode codons
+- orientation matters
+- motifs can signal biological function
+- subsequences can be treated as parts, features, or domains
+
+So even though Python begins with a generic string, our job is to build **biological meaning** on top of it.
+
+## Indexing and slicing sequences
+
+Because sequences are ordered, indexing and slicing are immediately useful.
+
+```{python}
+sequence = "ATGCGTACCGTTAG"
+
+first_base = sequence[0]
+start_codon = sequence[0:3]
+middle_region = sequence[3:9]
+last_three = sequence[-3:]
+
+first_base, start_codon, middle_region, last_three
+```
+
+This matters because many biological questions are positional.
+
+You may want to ask:
+
+- does the sequence begin with `ATG`?
+- what are bases 10 through 20?
+- what is the last codon?
+- what is the promoter region upstream of a coding sequence?
+
+A slice gives you a direct answer.
+
+```{python}
+sequence.startswith("ATG"), sequence.endswith("TAG")
+```
+
+The two methods above are simple, but they already capture a common form of sequence quality control.
+
+## Length is a biological property
+
+The length of a sequence is often the first thing you inspect.
+
+```{python}
+len(sequence)
+```
+
+Length affects many later decisions:
+
+- Is a coding sequence divisible by 3?
+- Is a promoter variant the expected size?
+- Did an assembly likely produce an insertion or deletion?
+- Are multiple parts aligned to the same design template?
+
+A short function makes that check reusable.
+
+```{python}
+def is_coding_sequence_length(seq: str) -> bool:
+    return len(seq) % 3 == 0
+
+
+is_coding_sequence_length("ATGAAATGA"), is_coding_sequence_length("ATGAAATG")
+```
+
+That function says nothing about whether the sequence is biologically valid as a protein-coding region. It only checks whether the length is compatible with codons. That distinction matters. Good scientific code often separates a large biological question into smaller computational checks.
+
+## Counting bases
+
+A sequence is also a composition. We often want to know how many times each base appears.
+
+```{python}
+from collections import Counter
+
+sequence = "ATGCGTACCGTTAG"
+base_counts = Counter(sequence)
+base_counts
+```
+
+From there, we can compute GC content.
+
+```{python}
+def gc_content(seq: str) -> float:
+    seq = seq.upper()
+    if len(seq) == 0:
+        return 0.0
+    gc = seq.count("G") + seq.count("C")
+    return gc / len(seq)
+
+
+gc_content(sequence)
+```
+
+To make the result easier to read, we often show it as a percentage.
+
+```{python}
+print(f"GC content: {gc_content(sequence):.1%}")
+```
+
+GC content is one of those simple measurements that appears everywhere in synthetic biology and bioinformatics:
+
+- checking whether a construct is unusually GC-rich or AT-rich
+- comparing designs from different organisms
+- screening codon-optimized variants
+- looking for problematic local sequence composition
+
+## Cleaning and validating sequence input
+
+Real input is messy. A sequence copied from a spreadsheet or a file may contain lowercase letters, spaces, line breaks, or unexpected symbols.
+
+```{python}
+raw_sequence = " atgcgtaccgttag\n"
+clean_sequence = raw_sequence.strip().upper()
+clean_sequence
+```
+
+That is a start, but in biology we also care whether every character belongs to the expected alphabet.
+
+```{python}
+def clean_dna(seq: str) -> str:
+    return "".join(seq.split()).upper()
+
+
+def is_valid_dna(seq: str) -> bool:
+    allowed = set("ATGC")
+    cleaned = clean_dna(seq)
+    return all(base in allowed for base in cleaned)
+
+
+is_valid_dna("ATG CCG\nTTA"), is_valid_dna("ATGBCC")
+```
+
+A more practical function should both clean and validate, and raise an error when something is wrong.
+
+```{python}
+def require_valid_dna(seq: str) -> str:
+    cleaned = clean_dna(seq)
+    invalid_bases = sorted(set(cleaned) - set("ATGC"))
+    if invalid_bases:
+        raise ValueError(f"Invalid DNA symbols: {invalid_bases}")
+    return cleaned
+
+
+require_valid_dna("atg ccg tta")
+```
+
+Now the function is doing real work for us:
+
+- removing irrelevant formatting
+- converting case consistently
+- refusing to continue when the input does not match our assumptions
+
+This is an important habit. Scientific code should fail clearly when its assumptions are violated.
+
+## Complement and reverse complement
+
+Many beginner sequence tasks become possible as soon as you can compute a reverse complement.
+
+In double-stranded DNA,
+
+- `A` pairs with `T`
+- `G` pairs with `C`
+
+Python's string translation tools make this neat and readable.
 
 ```{python}
 complement_map = str.maketrans("ATGC", "TACG")
+
+
+def complement(seq: str) -> str:
+    seq = require_valid_dna(seq)
+    return seq.translate(complement_map)
+
+
+def reverse_complement(seq: str) -> str:
+    seq = require_valid_dna(seq)
+    return seq.translate(complement_map)[::-1]
+
+
 sequence = "ATGCCGTA"
-reverse_complement = sequence.translate(complement_map)[::-1]
-reverse_complement
+complement(sequence), reverse_complement(sequence)
 ```
 
-## Draft note
+The expression `[::-1]` reverses a string. Combined with complementing the bases, it gives the reverse complement.
 
-Later expand this chapter with Biopython and feature annotations.
+That operation matters constantly in cloning and design work. For example, primers are often reasoned about in terms of reverse complements, and many motif searches need to consider both strands.
+
+## Searching for motifs
+
+A sequence is rarely only a sequence. It is also a container for motifs.
+
+A motif could be:
+
+- a restriction site
+- a ribosome binding site
+- a start codon
+- a terminator-like pattern
+- a barcode
+- a homopolymer stretch
+
+Python strings already support motif search.
+
+```{python}
+sequence = "ATGGAATTCGCCGTTAA"
+sequence.find("GAATTC")
+```
+
+The return value is the starting index of the first match. If the motif is absent, Python returns `-1`.
+
+```{python}
+sequence.find("GGATCC")
+```
+
+For many lab tasks, a simple yes-or-no answer is enough.
+
+```{python}
+def contains_site(seq: str, site: str) -> bool:
+    seq = require_valid_dna(seq)
+    site = require_valid_dna(site)
+    return site in seq
+
+
+contains_site(sequence, "GAATTC"), contains_site(sequence, "GGATCC")
+```
+
+Here is a small scanner for multiple common restriction sites.
+
+```{python}
+restriction_sites = {
+    "EcoRI": "GAATTC",
+    "BamHI": "GGATCC",
+    "BsaI": "GGTCTC",
+    "NotI": "GCGGCCGC",
+}
+
+
+def find_present_sites(seq: str, site_map: dict[str, str]) -> list[str]:
+    seq = require_valid_dna(seq)
+    present = []
+    for enzyme, site in site_map.items():
+        if site in seq:
+            present.append(enzyme)
+    return present
+
+
+find_present_sites("ATGGAATTCGGTCTCTAA", restriction_sites)
+```
+
+This kind of function is small, but it already resembles real screening logic used in design workflows.
+
+## DNA to RNA
+
+Once a sequence is validated, transcription is conceptually simple: replace `T` with `U`.
+
+```{python}
+def transcribe_dna(seq: str) -> str:
+    seq = require_valid_dna(seq)
+    return seq.replace("T", "U")
+
+
+coding_dna = "ATGGCCATTGTAATGGGCCGCTGA"
+transcribe_dna(coding_dna)
+```
+
+This function is not modeling transcriptional regulation or strand choice. It is only converting a coding-style DNA sequence into an RNA-style sequence representation.
+
+That may sound modest, but that is often enough for downstream analysis, teaching, and simple tooling.
+
+## Translation: codons to amino acids
+
+Translation is one of the first places where a sequence starts to feel like more than text.
+
+Instead of interpreting one character at a time, we interpret the sequence in triplets.
+
+Below is a standard codon table expressed as a Python dictionary.
+
+```{python}
+CODON_TABLE = {
+    "TTT": "F", "TTC": "F", "TTA": "L", "TTG": "L",
+    "TCT": "S", "TCC": "S", "TCA": "S", "TCG": "S",
+    "TAT": "Y", "TAC": "Y", "TAA": "*", "TAG": "*",
+    "TGT": "C", "TGC": "C", "TGA": "*", "TGG": "W",
+    "CTT": "L", "CTC": "L", "CTA": "L", "CTG": "L",
+    "CCT": "P", "CCC": "P", "CCA": "P", "CCG": "P",
+    "CAT": "H", "CAC": "H", "CAA": "Q", "CAG": "Q",
+    "CGT": "R", "CGC": "R", "CGA": "R", "CGG": "R",
+    "ATT": "I", "ATC": "I", "ATA": "I", "ATG": "M",
+    "ACT": "T", "ACC": "T", "ACA": "T", "ACG": "T",
+    "AAT": "N", "AAC": "N", "AAA": "K", "AAG": "K",
+    "AGT": "S", "AGC": "S", "AGA": "R", "AGG": "R",
+    "GTT": "V", "GTC": "V", "GTA": "V", "GTG": "V",
+    "GCT": "A", "GCC": "A", "GCA": "A", "GCG": "A",
+    "GAT": "D", "GAC": "D", "GAA": "E", "GAG": "E",
+    "GGT": "G", "GGC": "G", "GGA": "G", "GGG": "G",
+}
+
+
+def translate_dna(seq: str, stop_at_stop: bool = False) -> str:
+    seq = require_valid_dna(seq)
+    if len(seq) % 3 != 0:
+        raise ValueError("Sequence length must be divisible by 3 for translation.")
+
+    protein = []
+    for i in range(0, len(seq), 3):
+        codon = seq[i:i + 3]
+        amino_acid = CODON_TABLE[codon]
+        if stop_at_stop and amino_acid == "*":
+            break
+        protein.append(amino_acid)
+    return "".join(protein)
+
+
+translate_dna(coding_dna)
+```
+
+The stop codon is represented here by `*`, which is common in simple protein sequence displays.
+
+If we want translation to stop at the first stop codon, we can ask for that explicitly.
+
+```{python}
+translate_dna(coding_dna, stop_at_stop=True)
+```
+
+This is a good example of how a biological rule becomes a computational rule.
+
+- move through the sequence three bases at a time
+- map each codon to an amino acid
+- optionally stop when a termination codon appears
+
+Once you can write that logic, you begin to see how many “bioinformatics” tasks are just careful transformations of structured text.
+
+## Open reading frame checks
+
+A biologically useful translation function is often paired with quick screening rules.
+
+```{python}
+def looks_like_simple_orf(seq: str) -> bool:
+    seq = require_valid_dna(seq)
+    if len(seq) < 6:
+        return False
+    if len(seq) % 3 != 0:
+        return False
+    if not seq.startswith("ATG"):
+        return False
+    if seq[-3:] not in {"TAA", "TAG", "TGA"}:
+        return False
+    internal_codons = [seq[i:i+3] for i in range(3, len(seq) - 3, 3)]
+    return all(codon not in {"TAA", "TAG", "TGA"} for codon in internal_codons)
+
+
+looks_like_simple_orf("ATGGCCATTGTAATGGGCCGCTGA"), looks_like_simple_orf("ATGTAGGCCTAA")
+```
+
+This function is not a full ORF finder. It is a compact quality-control check that asks whether a sequence matches a simple protein-coding pattern:
+
+- starts with `ATG`
+- has a length divisible by 3
+- ends with a stop codon
+- contains no internal stop codons
+
+Those kinds of screening functions are excellent beginner projects because they are both conceptually clear and genuinely useful.
+
+## Sliding windows and local GC content
+
+Global GC content is useful, but local composition can matter too. A sequence may have an acceptable overall GC content and still contain a problematic local region.
+
+A sliding window lets us inspect local sequence properties.
+
+```{python}
+def gc_content_windows(seq: str, window_size: int) -> list[tuple[int, str, float]]:
+    seq = require_valid_dna(seq)
+    windows = []
+    for start in range(0, len(seq) - window_size + 1):
+        window = seq[start:start + window_size]
+        windows.append((start, window, gc_content(window)))
+    return windows
+
+
+window_results = gc_content_windows("ATGCGCGCTTAA", window_size=4)
+window_results[:5]
+```
+
+We can summarize the most GC-rich local window like this.
+
+```{python}
+max(window_results, key=lambda row: row[2])
+```
+
+This pattern generalizes well. Once you know how to slide a window along a sequence, you can search for many local properties:
+
+- GC-rich regions
+- homopolymers
+- repeated motifs
+- candidate primer regions
+- subsequences matching a design rule
+
+## FASTA: the first real file format many people meet
+
+In practice, sequences rarely arrive one at a time. They come in files.
+
+FASTA is one of the simplest and most common formats for sequence data. A minimal FASTA file looks like this:
+
+```text
+>seq1
+ATGCGTAC
+>seq2
+ATGGGCTA
+```
+
+Each record begins with a header line starting with `>`, followed by one or more sequence lines.
+
+Let us create a tiny FASTA file inside a temporary project area.
+
+```{python}
+from pathlib import Path
+import tempfile
+
+chapter4_demo_dir = Path(tempfile.mkdtemp(prefix="synbio_ch4_"))
+fasta_path = chapter4_demo_dir / "candidate_parts.fasta"
+
+fasta_text = ">promoter_variant_1\nATGCGTACCGTTAG\n>promoter_variant_2\nATGGAATTCGGTCTCTAA\n>coding_variant_1\nATGGCCATTGTAATGGGCCGCTGA\n"
+
+fasta_path.write_text(fasta_text)
+str(fasta_path)
+```
+
+Now we can write a simple FASTA parser.
+
+```{python}
+def read_fasta(path: Path) -> list[dict[str, str]]:
+    records = []
+    header = None
+    sequence_lines = []
+
+    with path.open() as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                if header is not None:
+                    records.append({
+                        "id": header,
+                        "sequence": require_valid_dna("".join(sequence_lines)),
+                    })
+                header = line[1:]
+                sequence_lines = []
+            else:
+                sequence_lines.append(line)
+
+        if header is not None:
+            records.append({
+                "id": header,
+                "sequence": require_valid_dna("".join(sequence_lines)),
+            })
+
+    return records
+
+
+records = read_fasta(fasta_path)
+records
+```
+
+This parser is intentionally small and readable. A production parser would need more features and more testing, and later in the book we will discuss library-based approaches. But it is valuable to build one yourself at least once. It helps you understand what the file format actually contains.
+
+## Summarizing a small sequence library
+
+Once the records are in Python, we can compute a compact summary for each one.
+
+```{python}
+def summarize_sequence_record(record: dict[str, str]) -> dict[str, object]:
+    seq = record["sequence"]
+    return {
+        "id": record["id"],
+        "length": len(seq),
+        "gc_percent": round(gc_content(seq) * 100, 1),
+        "starts_with_atg": seq.startswith("ATG"),
+        "contains_ecori": "GAATTC" in seq,
+        "contains_bsai": "GGTCTC" in seq,
+        "simple_orf": looks_like_simple_orf(seq),
+    }
+
+
+summaries = [summarize_sequence_record(record) for record in records]
+summaries
+```
+
+This is the heart of many sequence analysis workflows:
+
+1. read a file
+2. transform each record into a standard internal representation
+3. compute derived properties
+4. store those properties in a summary structure
+5. sort, filter, or export the results
+
+That pattern will appear again and again throughout the book.
+
+## Screening designs against simple rules
+
+Suppose you are evaluating a few candidate coding sequences for inclusion in an assembly workflow. You might want sequences that satisfy rules such as:
+
+- valid DNA only
+- begins with `ATG`
+- looks like a simple ORF
+- does not contain EcoRI or BsaI sites
+- GC content between 35% and 65%
+
+That is easy to express in code.
+
+```{python}
+def passes_simple_design_screen(seq: str) -> bool:
+    seq = require_valid_dna(seq)
+    gc = gc_content(seq)
+    return (
+        looks_like_simple_orf(seq)
+        and "GAATTC" not in seq
+        and "GGTCTC" not in seq
+        and 0.35 <= gc <= 0.65
+    )
+
+
+for record in records:
+    seq = record["sequence"]
+    print(record["id"], passes_simple_design_screen(seq))
+```
+
+Here, the code is acting like an explicit protocol for computational triage. Instead of vaguely saying “screen the candidates,” we state the rules exactly.
+
+That clarity has three advantages:
+
+- you can rerun the same screen later
+- collaborators can inspect the logic
+- you can change the rules intentionally rather than accidentally
+
+## Ranking candidate sequences
+
+Screening is often followed by ranking.
+
+Imagine that we want to prefer sequences that pass the screen and are closest to 50% GC.
+
+```{python}
+def design_score(seq: str) -> tuple[bool, float]:
+    seq = require_valid_dna(seq)
+    passes = passes_simple_design_screen(seq)
+    gc_distance_from_target = abs(gc_content(seq) - 0.50)
+    return (passes, -gc_distance_from_target)
+
+
+ranked_records = sorted(
+    records,
+    key=lambda record: design_score(record["sequence"]),
+    reverse=True,
+)
+
+[(record["id"], design_score(record["sequence"])) for record in ranked_records]
+```
+
+This example is intentionally simple, but it captures a real idea in computational design: once a design objective is formalized, Python can help you compare candidates consistently.
+
+## K-mers: treating sequences as overlapping words
+
+Another useful way to think about sequences is as overlapping “words” of fixed length.
+
+For DNA, a 3-mer is any sequence of 3 consecutive bases. A 4-mer is any sequence of 4 consecutive bases, and so on.
+
+```{python}
+def kmers(seq: str, k: int) -> list[str]:
+    seq = require_valid_dna(seq)
+    return [seq[i:i+k] for i in range(len(seq) - k + 1)]
+
+
+kmers("ATGCGTA", 3)
+```
+
+We can count them too.
+
+```{python}
+three_mer_counts = Counter(kmers("ATGCGTATGC", 3))
+three_mer_counts
+```
+
+K-mers appear in many kinds of biological computation:
+
+- sequence comparison
+- motif discovery
+- composition analysis
+- feature engineering for machine learning
+- quick heuristics for clustering or classification
+
+Even if you never use the term “k-mer” in daily lab conversation, the computational idea is worth learning.
+
+## Sequences as records, not just strings
+
+By now you may notice a pattern: a sequence alone is rarely enough.
+
+In real projects, a useful internal representation often looks more like this:
+
+```{python}
+sequence_record = {
+    "id": "coding_variant_1",
+    "sequence": "ATGGCCATTGTAATGGGCCGCTGA",
+    "description": "candidate reporter CDS",
+    "source": "design_round_1",
+}
+
+sequence_record
+```
+
+That is, the sequence lives alongside metadata.
+
+This is an important software design lesson for synthetic biology. Biological objects usually need:
+
+- an identifier
+- the raw sequence
+- annotations or provenance
+- derived properties computed later
+
+As projects grow, you may use richer structures such as data classes, Biopython objects, SBOL representations, or database tables. But the core idea is already visible here.
+
+## A mini workflow: from FASTA to a design report
+
+Let us finish the chapter with a compact workflow that ties together several ideas.
+
+We will read the FASTA file, summarize each sequence, keep the best candidates, and write a CSV report.
+
+```{python}
+import csv
+
+report_rows = []
+
+for record in records:
+    seq = record["sequence"]
+    report_rows.append({
+        "id": record["id"],
+        "length": len(seq),
+        "gc_percent": round(gc_content(seq) * 100, 1),
+        "passes_screen": passes_simple_design_screen(seq),
+        "protein": translate_dna(seq, stop_at_stop=True) if looks_like_simple_orf(seq) else "",
+    })
+
+report_rows
+```
+
+Now we write the report to disk.
+
+```{python}
+report_path = chapter4_demo_dir / "sequence_report.csv"
+
+with report_path.open("w", newline="") as handle:
+    writer = csv.DictWriter(
+        handle,
+        fieldnames=["id", "length", "gc_percent", "passes_screen", "protein"],
+    )
+    writer.writeheader()
+    writer.writerows(report_rows)
+
+report_path.exists(), report_path.name
+```
+
+And we can inspect the contents.
+
+```{python}
+report_path.read_text()
+```
+
+This is not yet an industrial pipeline, but it is real computational biology:
+
+- input file
+- validation
+- transformation
+- screening
+- output file
+
+That is already enough to save time in a lab and reduce avoidable mistakes.
+
+## When to stop writing your own sequence utilities
+
+It is good to build core tools like `reverse_complement` and a simple FASTA parser yourself once. These exercises teach the logic of sequence manipulation.
+
+But in larger projects, it is usually better to rely on well-tested libraries rather than continually rebuilding everything from scratch.
+
+Later in this book we will meet more specialized ecosystems and data models. For now, the important point is conceptual:
+
+- write small utilities yourself to understand the problem
+- switch to library abstractions when scale, complexity, or file-format breadth grows
+
+That balance matters in research software. Reinventing every wheel is inefficient, but using a tool you do not understand can also make debugging difficult.
+
+
+## Biopython: from strings to standardized sequence records
+
+Up to this point, we have deliberately written many sequence operations ourselves.
+
+That was worth doing. It taught us what a reverse complement actually is, what FASTA records really contain, and how translation logic works.
+
+But this is also the point where a working synthetic biology project usually reaches for a library.
+
+[Biopython](https://biopython.org/) is the most widely used general-purpose Python toolkit for molecular biology. Its core abstractions are especially important for sequence work:
+
+- `Seq`, a sequence object that behaves much like a string but also knows about biological operations
+- `SeqRecord`, a richer container that stores a sequence together with identifiers, descriptions, annotations, and features
+- `SeqIO`, a uniform interface for reading and writing sequence file formats such as FASTA and GenBank
+- `SearchIO`, a standardized interface for parsing sequence-search outputs such as BLAST
+
+In other words, Biopython helps you move from *sequence-like strings* to *standardized sequence records*.
+
+If you want to run the examples below locally, install the package in the same environment you use for Quarto:
+
+```{bash}
+pip install biopython
+```
+
+## `Seq`: a biological sequence object
+
+The Biopython `Seq` object looks familiar because it behaves in many ways like a string, but it also provides biological methods directly.
+
+```{python}
+from Bio.Seq import Seq
+
+bio_seq = Seq("ATGGCCATTGTAATGGGCCGCTGA")
+
+len(bio_seq), bio_seq[:6], bio_seq.reverse_complement()
+```
+
+Now operations that we previously implemented by hand come built in.
+
+```{python}
+bio_seq.transcribe(), bio_seq.translate(), bio_seq.translate(to_stop=True)
+```
+
+This is a good example of why library abstractions matter. The biological intent is visible directly in the code.
+
+## `SeqRecord`: a sequence plus metadata
+
+A bare sequence string is useful, but most real work needs more context.
+
+- What is the identifier?
+- What construct or part does this correspond to?
+- What description should appear in a file?
+- What annotations or features belong to this sequence?
+
+That is what `SeqRecord` is for.
+
+```{python}
+from Bio.SeqRecord import SeqRecord
+
+record = SeqRecord(
+    bio_seq,
+    id="demo_cds_1",
+    name="demo_cds_1",
+    description="Synthetic demonstration coding sequence",
+)
+record.annotations["source"] = "chapter4_demo"
+
+record.id, record.description, str(record.seq)
+```
+
+The key shift is conceptual.
+
+A `SeqRecord` is not just a string that happens to contain nucleotides. It is a **standardized record object** with agreed-upon fields and behaviors. Once your code works with records rather than naked strings, it becomes easier to read, easier to extend, and easier to exchange with other tools.
+
+## Reading FASTA with `SeqIO`
+
+Earlier in the chapter, we wrote our own FASTA parser. That was useful as a learning exercise. In most real projects, however, it is better to use Biopython's parser.
+
+```{python}
+from Bio import SeqIO
+
+bio_records = list(SeqIO.parse(fasta_path, "fasta"))
+[(record.id, len(record), str(record.seq[:6])) for record in bio_records]
+```
+
+Notice what changed.
+
+We did not get back dictionaries or raw strings. We got a list of `SeqRecord` objects. Each one has a standard interface:
+
+```{python}
+first_bio_record = bio_records[0]
+first_bio_record.id, first_bio_record.description, type(first_bio_record.seq).__name__
+```
+
+That standardization makes common operations concise.
+
+```{python}
+record_dict = SeqIO.to_dict(bio_records)
+record_dict["coding_variant_1"].seq.translate(to_stop=True)
+```
+
+We can also write records back out to disk after filtering or editing.
+
+```{python}
+biopython_filtered_path = chapter4_demo_dir / "no_ecori_records.fasta"
+filtered_records = [record for record in bio_records if "GAATTC" not in record.seq]
+SeqIO.write(filtered_records, biopython_filtered_path, "fasta")
+
+biopython_filtered_path.name, biopython_filtered_path.exists()
+```
+
+And because FASTA is simple text, we can inspect the output directly.
+
+```{python}
+biopython_filtered_path.read_text()
+```
+
+This is one of the main benefits of `SeqIO`: the same read-process-write pattern works across many file formats.
+
+## GenBank: richer records with annotations and features
+
+FASTA is excellent when all you need is a header and a sequence. But many synthetic biology tasks need more structure.
+
+A GenBank record can include:
+
+- accession-like identifiers
+- organism or source information
+- free-text description
+- annotations about the whole record
+- explicitly marked features such as promoters, CDSs, terminators, and origins
+
+Let us create a tiny GenBank example and parse it with Biopython.
+
+```{python}
+genbank_path = chapter4_demo_dir / "demo_construct.gb"
+
+genbank_text = """LOCUS       DEMO0001                  39 bp    DNA     linear   SYN 01-JAN-2024
+DEFINITION  Synthetic demonstration construct.
+ACCESSION   DEMO0001
+VERSION     DEMO0001.1
+KEYWORDS    synthetic biology.
+SOURCE      synthetic DNA construct
+  ORGANISM  synthetic DNA construct
+            other sequences; artificial sequences.
+FEATURES             Location/Qualifiers
+     source          1..39
+                     /organism=\"synthetic DNA construct\"
+                     /mol_type=\"other DNA\"
+     promoter        1..9
+                     /label=\"P_demo\"
+     CDS             10..33
+                     /gene=\"demoGFP\"
+                     /product=\"demo protein\"
+                     /codon_start=1
+                     /translation=\"MAIVMGR\"
+ORIGIN
+        1 ttgacatat atggccatt gtaatgggcc gctgaaatata
+//
+"""
+
+genbank_path.write_text(genbank_text)
+genbank_record = SeqIO.read(genbank_path, "genbank")
+
+genbank_record.id, len(genbank_record), genbank_record.description
+```
+
+Now we can inspect whole-record annotations.
+
+```{python}
+sorted(genbank_record.annotations.keys())
+```
+
+And we can inspect the features that were explicitly encoded in the file.
+
+```{python}
+[(feature.type, int(feature.location.start), int(feature.location.end)) for feature in genbank_record.features]
+```
+
+A GenBank feature is not just a text label. It has typed structure and a location on the sequence.
+
+```{python}
+cds_feature = next(feature for feature in genbank_record.features if feature.type == "CDS")
+str(cds_feature.extract(genbank_record.seq)), cds_feature.qualifiers["gene"][0], cds_feature.qualifiers["translation"][0]
+```
+
+This is where Biopython becomes especially powerful for synthetic biology.
+
+A richly annotated record gives your code a standard way to talk about sequence parts:
+
+- the whole construct lives in `genbank_record`
+- the DNA lives in `genbank_record.seq`
+- features live in `genbank_record.features`
+- metadata and annotations live in consistent attributes
+
+That is much more robust than passing around loosely formatted strings and hoping that everyone interprets them the same way.
+
+## Standardizing your own records
+
+Biopython is not only for reading public formats. It is also useful for creating your own standardized sequence records before writing them to disk or passing them into later analysis steps.
+
+```{python}
+from Bio.SeqFeature import SeqFeature, FeatureLocation
+
+custom_record = SeqRecord(
+    Seq("ATGGCCATTGTAATGGGCCGCTGA"),
+    id="design_001",
+    name="design_001",
+    description="Custom design record generated in Python",
+)
+custom_record.annotations["molecule_type"] = "DNA"
+custom_record.features = [
+    SeqFeature(FeatureLocation(0, len(custom_record.seq)), type="CDS", qualifiers={"gene": ["demo_gene"]})
+]
+
+custom_record.id, custom_record.features[0].type, str(custom_record.seq.translate())
+```
+
+Once your data has been put into a `SeqRecord`, many operations become standardized:
+
+- writing it to FASTA or GenBank
+- slicing sequence regions while keeping semantics clear
+- attaching feature information
+- passing the object between modules instead of inventing custom ad hoc dictionaries
+
+## BLAST with Biopython
+
+Sequence work often moves from *what is this sequence?* to *what does it resemble?*
+
+That is where BLAST enters. Biopython helps in two main ways:
+
+1. submitting BLAST searches
+2. parsing BLAST outputs into structured Python objects
+
+For small exploratory work, you can submit a query to NCBI directly from Python. The example below is shown for completeness but is not executed in this chapter because it depends on internet access and should be used with care.
+
+```{python eval=false}
+from Bio.Blast import NCBIWWW
+
+NCBIWWW.email = "your_email@example.com"
+
+with NCBIWWW.qblast("blastn", "nt", str(record_dict["coding_variant_1"].seq)) as result_handle:
+    blast_xml = result_handle.read()
+
+# Save the XML for later parsing
+(chapter4_demo_dir / "coding_variant_1_blast.xml").write_text(blast_xml)
+```
+
+In teaching and in production pipelines, it is often better to separate the two tasks:
+
+- run BLAST remotely or locally
+- parse the output later in a reproducible script
+
+Biopython's `SearchIO` module is designed for this second task.
+
+Let us create a tiny BLAST-like tabular output file and parse it.
+
+```{python}
+from Bio import SearchIO
+
+blast_tab_path = chapter4_demo_dir / "toy_blast.tsv"
+blast_tab_text = """query1	subjectA	100.000	12	0	0	1	12	5	16	1e-20	50.0
+query1	subjectB	91.667	12	1	0	1	12	20	31	2e-10	40.0
+query2	subjectA	87.500	8	1	0	1	8	30	37	1e-05	25.0
+"""
+blast_tab_path.write_text(blast_tab_text)
+
+qresults = list(SearchIO.parse(blast_tab_path, "blast-tab"))
+[(qresult.id, len(qresult)) for qresult in qresults]
+```
+
+Each query result contains one or more hits, and each hit contains one or more HSPs (high-scoring segment pairs).
+
+```{python}
+first_qresult = qresults[0]
+best_hit = first_qresult[0]
+best_hsp = best_hit.hsps[0]
+
+best_hit.id, best_hsp.evalue, best_hsp.ident_pct
+```
+
+We can inspect the coordinates as well.
+
+```{python}
+best_hsp.query_start, best_hsp.query_end, best_hsp.hit_start, best_hsp.hit_end
+```
+
+This object model matters because it standardizes BLAST parsing. Instead of manually splitting lines and remembering which column means what, you can work with named attributes on structured objects.
+
+A small summarizer turns those structured results into a Python-friendly report.
+
+```{python}
+def summarize_blast_qresults(qresults):
+    rows = []
+    for qresult in qresults:
+        for hit in qresult:
+            top_hsp = hit.hsps[0]
+            rows.append(
+                {
+                    "query_id": qresult.id,
+                    "hit_id": hit.id,
+                    "evalue": top_hsp.evalue,
+                    "bitscore": top_hsp.bitscore,
+                    "identity_percent": round(top_hsp.ident_pct, 1),
+                    "query_start": top_hsp.query_start,
+                    "query_end": top_hsp.query_end,
+                    "hit_start": top_hsp.hit_start,
+                    "hit_end": top_hsp.hit_end,
+                }
+            )
+    return rows
+
+blast_summary_rows = summarize_blast_qresults(qresults)
+blast_summary_rows
+```
+
+That list of dictionaries is exactly the kind of object you might later convert into a table, save to CSV, or merge with other experimental metadata.
+
+## Why this matters in synthetic biology
+
+Biopython does more than save typing.
+
+It gives you **shared data models**.
+
+That matters because synthetic biology work often moves across tools and stages:
+
+- sequence design
+- file exchange
+- annotation
+- search and comparison
+- downstream analysis and reporting
+
+If each stage invents its own record format, your code base becomes fragile. If instead you rely on standard objects like `SeqRecord`, `SeqIO`, and `SearchIO`, many operations become easier to automate and easier to reason about.
+
+This is also a cultural shift.
+
+Earlier in the chapter, we learned sequence logic by writing our own functions. With Biopython, we start to participate in a broader software ecosystem where records, annotations, and search results follow shared conventions.
+
+That is a major step toward research code that other people can read, reuse, and extend.
+
+## Exercises
+
+1. Write a function `has_homopolymer(seq, n)` that returns `True` if a sequence contains a run of the same base of length `n` or more.
+2. Modify `find_present_sites` so that it returns both the enzyme name and the position of the match.
+3. Write a function that counts codons in a coding sequence and returns the most common codon.
+4. Extend `read_fasta` so that it also preserves the full FASTA header and splits out an identifier from the description.
+5. Add a new screening rule to `passes_simple_design_screen`, such as a maximum homopolymer length or a required stop codon.
+6. Create a second FASTA file with deliberately invalid input and confirm that your validation logic fails clearly.
+
+## Recap
+
+In this chapter, you learned how to treat sequences as structured, biologically meaningful data.
+
+You used Python to:
+
+- index and slice sequences
+- compute base composition and GC content
+- validate DNA input
+- compute complements and reverse complements
+- transcribe DNA to RNA
+- translate codons into protein sequences
+- check simple ORF-like properties
+- scan for motifs and restriction sites
+- generate k-mers
+- read FASTA records
+- summarize and screen a small sequence library
+- write a compact CSV report
+
+This chapter marks an important transition in the book.
+
+In the earlier chapters, Python was the subject. Here, biology and Python begin to meet directly.
+
+From this point on, we will increasingly use code not only to learn programming concepts, but to express the kinds of reasoning that synthetic biology depends on.

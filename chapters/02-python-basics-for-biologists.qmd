@@ -1,21 +1,635 @@
 # Python Basics for Biologists
 
-## Draft focus
+In this chapter we begin writing Python directly.
 
-Teach variables, lists, dictionaries, functions, loops, and conditionals using biological examples.
+Our goal is not to cover every part of the language. Our goal is to learn enough of the core ideas that you can read simple programs, write your own small analyses, and modify examples with confidence.
 
-## Starter example
+We will focus on a compact set of tools that reappear constantly in scientific work:
+
+- variables
+- numbers and strings
+- lists and dictionaries
+- loops and conditionals
+- functions
+- simple record-oriented data processing
+
+Every concept will be tied to a biological example.
+
+## Running code is part of reading code
+
+When you study programming from a book, it is tempting to read passively and tell yourself that the example "makes sense." Resist that temptation.
+
+You should run the code, inspect the output, and then change something. Change a sequence. Change a threshold. Introduce a typo. Replace a number. Most understanding comes from that short loop between action and feedback.
+
+## Variables: naming biological quantities
+
+A variable is a name attached to a value.
+
+In biology, values might represent:
+
+- a DNA sequence
+- an inducer concentration
+- a fluorescence measurement
+- a strain name
+- the number of replicates in an experiment
+
+```{python}
+strain = "E_coli_MG1655"
+plasmid = "pTac-GFP"
+inducer_mM = 0.5
+replicates = 3
+```
+
+These names now point to values. We can inspect them.
+
+```{python}
+print(strain)
+print(plasmid)
+print(inducer_mM)
+print(replicates)
+```
+
+Good variable names make scientific code easier to understand. Compare these two names:
+
+- `x`
+- `fluorescence_au`
+
+The second name carries experimental meaning. In research code, good names are often more valuable than short names.
+
+## Numbers and arithmetic
+
+Python works naturally with integers and decimal values.
+
+```{python}
+colonies = 148
+volume_uL = 12.5
+fluorescence = 15230
+od600 = 0.81
+
+expression_per_od = fluorescence / od600
+expression_per_od
+```
+
+You can combine calculations just as you would in a lab notebook.
+
+```{python}
+dilution_factor = 100
+final_concentration = inducer_mM / dilution_factor
+final_concentration
+```
+
+Parentheses help make the logic explicit.
+
+```{python}
+replicate_values = [15100, 15230, 14980]
+average_expression = sum(replicate_values) / len(replicate_values)
+average_expression
+```
+
+## Strings: sequences and labels
+
+Strings are pieces of text. In synthetic biology they often represent names, identifiers, or biological sequences.
+
+```{python}
+sequence = "ATGCGTACCTGA"
+promoter = "pTet"
+```
+
+You can ask for the length of a sequence.
+
+```{python}
+len(sequence)
+```
+
+You can access individual characters by position. Python counts from zero.
+
+```{python}
+sequence[0], sequence[1], sequence[2]
+```
+
+You can also take slices.
+
+```{python}
+sequence[0:6]
+```
+
+That slice means "start at position 0 and stop before position 6."
+
+### Useful string methods
+
+A method is an operation attached to a value. Strings come with many helpful methods.
+
+```{python}
+raw_sequence = " atgcgtacctga\n"
+clean_sequence = raw_sequence.strip().upper()
+clean_sequence
+```
+
+Two methods that appear constantly in sequence work are `.count()` and `.replace()`.
+
+```{python}
+sequence = "ATGCGTACCTGA"
+print(sequence.count("G"))
+print(sequence.replace("T", "U"))
+```
+
+The first counts how many times `"G"` appears. The second makes a new string where every `T` is replaced with `U`, which is a crude way to represent the corresponding RNA sequence.
+
+## Writing your first function
+
+A function packages a piece of logic so you can reuse it.
+
+Let us write a function for GC content.
 
 ```{python}
 def gc_content(seq: str) -> float:
     seq = seq.upper()
     gc = seq.count("G") + seq.count("C")
     return gc / len(seq)
+```
 
+Now we can apply it to any sequence.
+
+```{python}
 for seq in ["ATGC", "ATATGGCC", "GCGCGC"]:
     print(seq, round(gc_content(seq), 3))
 ```
 
-## Draft note
+Functions are one of the most important ideas in programming because they let you give a name to a scientific operation.
 
-Keep the examples simple enough that a wet-lab reader can read them line by line.
+In the same way that a protocol gives a name to a recurring experimental procedure, a function gives a name to a recurring computational procedure.
+
+### Make functions safer
+
+Real data are messy. What happens if we pass an empty string?
+
+```{python}
+def safe_gc_content(seq: str) -> float:
+    seq = seq.strip().upper()
+    if len(seq) == 0:
+        return 0.0
+    gc = seq.count("G") + seq.count("C")
+    return gc / len(seq)
+
+
+print(safe_gc_content(""))
+print(safe_gc_content(" aaGGcc "))
+```
+
+This introduces our first conditional.
+
+## Conditionals: making decisions in code
+
+Conditionals let a program do different things depending on the situation.
+
+```{python}
+def classify_gc(seq: str) -> str:
+    gc = safe_gc_content(seq)
+    if gc >= 0.60:
+        return "high_gc"
+    elif gc >= 0.40:
+        return "medium_gc"
+    else:
+        return "low_gc"
+
+
+for seq in ["ATATAT", "ATGCGT", "GCGCGC"]:
+    print(seq, classify_gc(seq))
+```
+
+This is a simple version of rule-based reasoning. In biology we often encode decisions in exactly this way:
+
+- if growth is below threshold, flag the culture
+- if a sequence contains a forbidden site, reject the design
+- if fluorescence exceeds a target, keep the construct
+
+The syntax may be new, but the logic should feel familiar.
+
+## Lists: working with collections
+
+A list stores multiple values in order.
+
+```{python}
+constructs = ["pTac-GFP", "pTet-GFP", "pBAD-GFP"]
+constructs
+```
+
+You can access elements by index.
+
+```{python}
+constructs[0], constructs[2]
+```
+
+You can add a new element.
+
+```{python}
+constructs.append("pLacI-mCherry")
+constructs
+```
+
+Lists are useful whenever you have a collection of related objects:
+
+- a set of sequences
+- a list of strain IDs
+- replicate measurements
+- candidate designs
+
+### Looping through a list
+
+A `for` loop repeats an action for each item in a collection.
+
+```{python}
+sequences = [
+    "ATGAAACGTTTACGCGCTAA",
+    "ATGCGCGCGCGTTATATATAA",
+    "ATGAATTTCGATCGATTTAA",
+]
+
+for seq in sequences:
+    print(seq, f"GC={gc_content(seq):.2%}")
+```
+
+This pattern appears everywhere in scientific programming: "for each sample, do the same analysis."
+
+## Building lists from loops
+
+Sometimes we do not only want to print results. We want to store them.
+
+```{python}
+gc_values = []
+
+for seq in sequences:
+    gc_values.append(gc_content(seq))
+
+gc_values
+```
+
+Now we can summarize the results.
+
+```{python}
+min(gc_values), max(gc_values), sum(gc_values) / len(gc_values)
+```
+
+Python also offers a compact syntax called a list comprehension.
+
+```{python}
+gc_values_compact = [gc_content(seq) for seq in sequences]
+gc_values_compact
+```
+
+For beginners, comprehensions may look dense at first. You do not need to force yourself to use them immediately. A regular `for` loop is often easier to read while you are learning.
+
+## Dictionaries: attaching names to values
+
+A dictionary stores key-value pairs. This is extremely useful for biological data because experiments often combine measurements with metadata.
+
+```{python}
+sample = {
+    "construct": "pTac-GFP",
+    "strain": "E_coli_MG1655",
+    "od600": 0.82,
+    "fluorescence": 15420,
+}
+
+sample
+```
+
+You can access values by key.
+
+```{python}
+sample["construct"], sample["fluorescence"]
+```
+
+You can add new values.
+
+```{python}
+sample["expression_per_od"] = sample["fluorescence"] / sample["od600"]
+sample
+```
+
+This is a very common style for small data tasks: represent one biological observation as a dictionary, then store many observations in a list.
+
+## A list of dictionaries: a tiny experimental dataset
+
+Let us represent a miniature experiment.
+
+```{python}
+experiment = [
+    {"construct": "pTac-GFP", "condition": "glucose", "od600": 0.82, "fluorescence": 15420},
+    {"construct": "pTac-GFP", "condition": "glycerol", "od600": 0.77, "fluorescence": 14110},
+    {"construct": "pTet-GFP", "condition": "glucose", "od600": 0.79, "fluorescence": 11210},
+    {"construct": "pTet-GFP", "condition": "glycerol", "od600": 0.74, "fluorescence": 12600},
+]
+
+experiment
+```
+
+Now let us compute normalized expression for every row.
+
+```{python}
+for row in experiment:
+    row["expression_per_od"] = row["fluorescence"] / row["od600"]
+
+experiment
+```
+
+And let us print a readable summary.
+
+```{python}
+for row in experiment:
+    print(
+        f"{row['construct']} in {row['condition']}: "
+        f"{row['expression_per_od']:.1f} AU/OD"
+    )
+```
+
+This is already a recognizable analysis pattern.
+
+## Filtering data with conditionals
+
+You will often want to keep only rows that satisfy a rule.
+
+```{python}
+qc_pass = []
+
+for row in experiment:
+    if row["od600"] >= 0.76:
+        qc_pass.append(row)
+
+qc_pass
+```
+
+The same logic can be written as a list comprehension.
+
+```{python}
+qc_pass_compact = [row for row in experiment if row["od600"] >= 0.76]
+qc_pass_compact
+```
+
+Filtering is one of the most common data-cleaning tasks in biology.
+
+## Counting things with dictionaries
+
+Dictionaries are also useful for summarizing categories.
+
+Suppose we have a list of annotations for a set of constructs.
+
+```{python}
+annotations = [
+    "promoter",
+    "promoter",
+    "cds",
+    "terminator",
+    "cds",
+    "rbs",
+    "promoter",
+]
+
+feature_counts = {}
+
+for feature in annotations:
+    if feature not in feature_counts:
+        feature_counts[feature] = 0
+    feature_counts[feature] += 1
+
+feature_counts
+```
+
+Python can also do this more directly with `collections.Counter`, which we saw in the previous chapter.
+
+```{python}
+from collections import Counter
+
+Counter(annotations)
+```
+
+The longer version is still worth studying because it teaches you how counting works step by step.
+
+## Reading simple tabular data
+
+Eventually you will use tools like pandas for larger data tables. But it is helpful to first understand the basic structure of tabular data.
+
+Here we will use the built-in `csv` module together with an in-memory text buffer.
+
+```{python}
+import csv
+from io import StringIO
+
+csv_text = """sample,od600,fluorescence
+A1,0.81,15230
+A2,0.77,14120
+B1,0.79,11340
+"""
+
+reader = csv.DictReader(StringIO(csv_text))
+rows = list(reader)
+rows
+```
+
+Notice that CSV data are read as strings by default.
+
+```{python}
+rows[0]
+```
+
+So we often need to convert numeric fields.
+
+```{python}
+for row in rows:
+    row["od600"] = float(row["od600"])
+    row["fluorescence"] = int(row["fluorescence"])
+    row["expression_per_od"] = row["fluorescence"] / row["od600"]
+
+rows
+```
+
+This example is small, but conceptually it matches what happens when you import real instrument output.
+
+## Strings plus dictionaries: reverse complements
+
+Let us build a slightly more biological utility. A reverse complement is a classic beginner exercise because it combines strings, dictionaries, loops, and functions.
+
+```{python}
+def reverse_complement(seq: str) -> str:
+    complements = {
+        "A": "T",
+        "T": "A",
+        "G": "C",
+        "C": "G",
+    }
+    seq = seq.upper()
+    reversed_bases = reversed(seq)
+    return "".join(complements[base] for base in reversed_bases)
+
+
+reverse_complement("ATGCCGTA")
+```
+
+Let us test it on a few sequences.
+
+```{python}
+for seq in ["ATGC", "GGGAAA", "TTAACCGG"]:
+    print(seq, "->", reverse_complement(seq))
+```
+
+This function is useful not only because reverse complements matter biologically, but because it demonstrates how to decompose a task:
+
+1. define a mapping
+2. standardize the input
+3. reverse the sequence
+4. translate each character
+5. join the result back into a string
+
+That is computational thinking in a very practical form.
+
+## A slightly richer example: screening constructs
+
+Now let us combine multiple ideas into one small workflow.
+
+We will represent several constructs, compute a few properties, and decide which ones pass a simple screen.
+
+```{python}
+construct_library = [
+    {"name": "variant_A", "sequence": "ATGAAACGTTTACGCGCTAA", "promoter": "pTac"},
+    {"name": "variant_B", "sequence": "ATGCGCGCGCGTTATATATAA", "promoter": "pTet"},
+    {"name": "variant_C", "sequence": "ATGAATTTCGATCGATTTAA", "promoter": "pBAD"},
+]
+
+for construct in construct_library:
+    seq = construct["sequence"]
+    construct["length_bp"] = len(seq)
+    construct["gc_fraction"] = gc_content(seq)
+    construct["gc_class"] = classify_gc(seq)
+
+construct_library
+```
+
+Now let us define a simple selection rule.
+
+```{python}
+selected = []
+
+for construct in construct_library:
+    if construct["length_bp"] >= 20 and construct["gc_fraction"] >= 0.40:
+        selected.append(construct)
+
+selected
+```
+
+And let us print a short report.
+
+```{python}
+for construct in selected:
+    print(
+        f"{construct['name']} ({construct['promoter']}): "
+        f"length={construct['length_bp']} bp, "
+        f"GC={construct['gc_fraction']:.2%}, "
+        f"class={construct['gc_class']}"
+    )
+```
+
+This is still a toy example, but it already looks like something that could grow into a real design-screening utility.
+
+## Common beginner mistakes
+
+You are going to make mistakes. That is normal. Here are a few that appear often.
+
+### Forgetting that Python starts counting at zero
+
+```{python}
+sequence = "ATGCGT"
+print(sequence[0])
+print(sequence[5])
+```
+
+There is no element at position 6 because indexing starts at 0.
+
+### Mixing strings and numbers
+
+```{python}
+value_text = "10"
+value_number = 10
+
+print(value_text)
+print(value_number)
+print(int(value_text) + value_number)
+```
+
+Data from files often arrive as text and must be converted before calculation.
+
+### Using `=` when you mean comparison
+
+- `=` assigns a value
+- `==` checks whether two values are equal
+
+```{python}
+condition = "induced"
+print(condition == "induced")
+```
+
+### Forgetting to return a value from a function
+
+```{python}
+def promoter_label(name: str) -> str:
+    if name.startswith("p"):
+        return "looks_like_promoter_name"
+    return "other"
+
+
+promoter_label("pTac")
+```
+
+When a function should produce a result, `return` is what sends that result back.
+
+## Style matters because science is collaborative
+
+As your scripts become more useful, other people will read them. Clear style makes that easier.
+
+A few practical habits:
+
+- use descriptive variable names
+- keep functions short when possible
+- write code in small testable steps
+- avoid copying and pasting the same logic many times
+- add a short comment when the scientific reasoning is not obvious from the code alone
+
+Here is an example of a helpful scientific comment.
+
+```{python}
+# Normalize fluorescence by OD600 so cultures with different densities
+# are easier to compare on a per-biomass basis.
+normalized_expression = fluorescence / od600
+normalized_expression
+```
+
+A comment should explain *why* when the why is not already obvious.
+
+## Practice: modify the code, do not only read it
+
+Before moving on, try changing the examples in concrete ways.
+
+- Add another construct to `construct_library`.
+- Change the GC classification thresholds.
+- Add a new field called `replicates` to each experimental row.
+- Rewrite `reverse_complement()` so it handles lowercase input without calling `.upper()`.
+- Change the selection rule so that constructs with `promoter == "pBAD"` always pass.
+
+These small changes are where fluency begins.
+
+## Exercises
+
+1. Write a function called `at_content()` that returns the fraction of `A` and `T` bases in a sequence.
+2. Given a list of fluorescence values, compute the mean using `sum()` and `len()`.
+3. Create a list of dictionaries representing three strains with fields `name`, `growth_rate`, and `passed_qc`. Print only the names of strains that passed QC.
+4. Modify `reverse_complement()` so that it raises an informative error if the sequence contains a character other than `A`, `T`, `G`, or `C`.
+5. Represent a tiny promoter library as a dictionary mapping promoter names to strengths, and print the strongest promoter.
+
+## Key ideas from this chapter
+
+- Variables give names to biological quantities and measurements.
+- Strings are useful for labels and sequences.
+- Lists hold collections, and dictionaries attach names to values.
+- Loops let you apply the same logic across many biological objects.
+- Conditionals let you encode scientific decision rules.
+- Functions package reusable analysis steps.
+- Even simple Python structures are enough to represent meaningful biological workflows.

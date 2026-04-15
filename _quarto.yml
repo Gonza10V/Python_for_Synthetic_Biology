@@ -26,8 +26,8 @@ book:
     - part: "Part III - Models, Standards, and Design Automation"
       chapters:
         - chapters/07-modeling-gene-expression.qmd
-        - chapters/08-design-build-test-learn.qmd
-        - chapters/09-sbol-and-tooling.qmd
+        - chapters/08-sbol-and-tooling.qmd
+        - chapters/09-design-build-test-learn.qmd
     - part: "Part IV - Case Studies from Real Lab Software"
       chapters:
         - chapters/10-rudgelab-case-studies.qmd

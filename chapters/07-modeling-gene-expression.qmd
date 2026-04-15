@@ -1,17 +1,827 @@
 # Modeling Gene Expression
 
-## Draft focus
+Synthetic biology is not only about storing data and drawing circuits.
 
-Bridge simple programming to dynamical systems and quantitative reasoning.
+It is also about asking quantitative questions.
 
-## Starter example
+- How fast will a reporter accumulate?
+- What happens if a protein degrades more quickly?
+- How strongly does a promoter respond to an inducer?
+- Will two conditions separate cleanly, or overlap too much to be useful?
+- What parameters matter most?
+
+Those are modeling questions.
+
+A model is a simplified mathematical description of a biological system.
+
+A good model does not capture everything. It captures the things that matter for the question we are asking.
+
+In this chapter, we will build simple models of gene expression in Python.
+
+Our goals are practical:
+
+- translate a biological story into equations
+- simulate those equations numerically
+- store simulated outputs in **tidy data** format
+- compare conditions and parameters systematically
+- build intuition for expression dynamics, not just algebra
+
+This chapter is not a full course in dynamical systems.
+
+It is a working introduction for synthetic biologists who want to think quantitatively and write code that supports that thinking.
+
+## Why model gene expression?
+
+Experiments tell us what happened.
+
+Models help us reason about what could happen.
+
+That matters because synthetic biology often involves design choices before an experiment is run.
+
+For example, you may want to compare:
+
+- a strong promoter vs a weak promoter
+- a stable protein vs a destabilized one
+- a low-copy plasmid vs a high-copy plasmid
+- a tightly repressed promoter vs a leaky promoter
+- a steep response curve vs a shallow one
+
+A model lets us explore those alternatives quickly.
+
+It does **not** replace experiments.
+
+Instead, it helps with:
+
+- intuition building
+- experimental planning
+- parameter sensitivity analysis
+- identifying unrealistic expectations
+- communicating assumptions clearly
+
+In synthetic biology, even simple models can be extremely useful.
+
+## Variables, parameters, and rates
+
+A model usually contains three kinds of ingredients.
+
+### Variables
+
+Variables change over time.
+
+Examples:
+
+- mRNA concentration
+- protein concentration
+- inducer concentration
+- cell density
+
+### Parameters
+
+Parameters are fixed for one simulation.
+
+Examples:
+
+- transcription rate
+- translation rate
+- degradation rate
+- Hill coefficient
+- dissociation constant
+
+### Rules of change
+
+Rules of change tell us how variables evolve.
+
+For gene expression, a common idea is:
+
+- molecules are produced
+- molecules are removed or diluted
+
+That is the core of many useful models.
+
+## The simplest expression model: production and loss
+
+Let `P` be the amount of protein.
+
+A minimal model says:
+
+\[
+\frac{dP}{dt} = \beta - \gamma P
+\]
+
+where:
+
+- `\beta` is the production rate
+- `\gamma` is the loss rate
+- `P` is the protein amount
+
+The biological story is simple.
+
+Protein is continuously produced, but it is also lost through degradation or dilution during growth.
+
+This model already teaches something important.
+
+At steady state, production and loss balance each other.
+
+If:
+
+\[
+\frac{dP}{dt} = 0
+\]
+
+then:
+
+\[
+P^* = \frac{\beta}{\gamma}
+\]
+
+So the steady-state level depends on both production and loss.
+
+A stronger promoter can increase expression, but so can a lower loss rate.
+
+## Computing the analytical solution
+
+For the simple production-loss model, there is a closed-form solution.
+
+If the initial amount is zero, then:
+
+\[
+P(t) = \frac{\beta}{\gamma}\left(1 - e^{-\gamma t}\right)
+\]
+
+Let us compute that in Python.
 
 ```{python}
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
-time = np.linspace(0, 10, 6)
-production = 2.0
-loss = 0.3
-protein = production / loss * (1 - np.exp(-loss * time))
-protein.round(3)
+beta = 4.0
+gamma = 0.5
+
+time = np.linspace(0, 12, 121)
+protein = beta / gamma * (1 - np.exp(-gamma * time))
+
+analytic_df = pd.DataFrame(
+    {
+        "time_h": time,
+        "species": "protein",
+        "value": protein,
+        "model": "analytic",
+        "condition": "baseline",
+    }
+)
+
+analytic_df.head()
 ```
+
+This is a **tidy time-course table**.
+
+Each row is one observation of one variable at one time under one condition.
+
+That is the convention we will keep using.
+
+Even simulated data should be stored in tidy format when possible.
+
+## Visualizing the approach to steady state
+
+```{python}
+plt.figure(figsize=(7, 4))
+plt.plot(analytic_df["time_h"], analytic_df["value"])
+plt.axhline(beta / gamma, linestyle="--")
+plt.xlabel("Time (h)")
+plt.ylabel("Protein amount")
+plt.title("Protein approaches a steady state")
+plt.show()
+```
+
+The dashed line is the steady-state value `\beta / \gamma`.
+
+The curve rises quickly at first, then slows as loss catches up to production.
+
+That shape appears everywhere in biology.
+
+## Simulating the same model with Euler's method
+
+Many biological models do **not** have neat analytical solutions.
+
+So we need a numerical method.
+
+A very common first method is **Euler's method**.
+
+The idea is simple.
+
+If the current state is `P`, and the rate of change is:
+
+\[
+\frac{dP}{dt} = f(P)
+\]
+
+then over a small time step `dt`, we approximate:
+
+\[
+P_{next} = P + dt \cdot f(P)
+\]
+
+For our model:
+
+\[
+P_{next} = P + dt(\beta - \gamma P)
+\]
+
+Let us implement that.
+
+```{python}
+def simulate_protein(beta, gamma, t_end=12, dt=0.1, p0=0.0, condition="baseline"):
+    times = np.arange(0, t_end + dt, dt)
+    p = p0
+    records = []
+
+    for t in times:
+        records.append(
+            {
+                "time_h": t,
+                "species": "protein",
+                "value": p,
+                "condition": condition,
+                "model": "euler",
+            }
+        )
+        dp_dt = beta - gamma * p
+        p = p + dt * dp_dt
+
+    return pd.DataFrame(records)
+
+euler_df = simulate_protein(beta=4.0, gamma=0.5)
+euler_df.head()
+```
+
+We can compare the numerical and analytical solutions.
+
+```{python}
+comparison_df = pd.concat([analytic_df, euler_df], ignore_index=True)
+comparison_df.head()
+```
+
+```{python}
+plt.figure(figsize=(7, 4))
+
+for model_name, subset in comparison_df.groupby("model"):
+    plt.plot(subset["time_h"], subset["value"], label=model_name)
+
+plt.xlabel("Time (h)")
+plt.ylabel("Protein amount")
+plt.title("Analytical and Euler solutions are close")
+plt.legend()
+plt.show()
+```
+
+For a small enough `dt`, Euler's method does a good job here.
+
+That is one of the first practical lessons of modeling:
+
+- the biology matters
+- the mathematics matters
+- the numerical method matters too
+
+## Time scales matter
+
+The parameter `\gamma` controls how quickly the system responds.
+
+If `\gamma` is large, the system adjusts quickly.
+
+If `\gamma` is small, the system changes slowly.
+
+We can compare several degradation or dilution rates.
+
+```{python}
+rate_sweep = pd.concat(
+    [
+        simulate_protein(beta=4.0, gamma=0.2, condition="gamma=0.2"),
+        simulate_protein(beta=4.0, gamma=0.5, condition="gamma=0.5"),
+        simulate_protein(beta=4.0, gamma=1.0, condition="gamma=1.0"),
+    ],
+    ignore_index=True,
+)
+
+rate_sweep.head()
+```
+
+```{python}
+plt.figure(figsize=(7, 4))
+for condition, subset in rate_sweep.groupby("condition"):
+    plt.plot(subset["time_h"], subset["value"], label=condition)
+
+plt.xlabel("Time (h)")
+plt.ylabel("Protein amount")
+plt.title("Loss rate changes both speed and steady state")
+plt.legend()
+plt.show()
+```
+
+Notice what changed.
+
+When `\gamma` increases:
+
+- the system responds faster
+- the steady-state level falls because `\beta / \gamma` becomes smaller
+
+That is a powerful design idea.
+
+Destabilizing a protein can make a system faster, but often at the cost of lower signal.
+
+## Building a tidy summary table
+
+Because our simulations are already tidy, summarizing them is straightforward.
+
+Let us extract the final simulated value for each condition.
+
+```{python}
+final_values = (
+    rate_sweep.sort_values("time_h")
+    .groupby(["condition", "species"], as_index=False)
+    .tail(1)
+    .loc[:, ["condition", "species", "value"]]
+    .rename(columns={"value": "final_value"})
+    .reset_index(drop=True)
+)
+
+final_values
+```
+
+This is exactly why tidy data is useful after Chapter 5.
+
+We do not need a special case for simulated results.
+
+We can filter, group, summarize, and merge them the same way we handled experimental data.
+
+## A two-stage model: mRNA and protein
+
+The one-variable model is useful, but gene expression usually has at least two conceptual stages:
+
+1. transcription produces mRNA
+2. translation produces protein from mRNA
+
+A simple two-stage model is:
+
+\[
+\frac{dm}{dt} = \alpha - \delta_m m
+\]
+
+\[
+\frac{dp}{dt} = k_{tl} m - \delta_p p
+\]
+
+where:
+
+- `m` is mRNA amount
+- `p` is protein amount
+- `\alpha` is transcription rate
+- `\delta_m` is mRNA loss rate
+- `k_{tl}` is translation rate
+- `\delta_p` is protein loss rate
+
+This model helps us separate fast RNA dynamics from slower protein accumulation.
+
+## Simulating the two-stage model
+
+```{python}
+def simulate_mrna_protein(
+    alpha,
+    delta_m,
+    k_tl,
+    delta_p,
+    t_end=12,
+    dt=0.05,
+    m0=0.0,
+    p0=0.0,
+    condition="baseline",
+):
+    times = np.arange(0, t_end + dt, dt)
+    m = m0
+    p = p0
+    records = []
+
+    for t in times:
+        records.append({"time_h": t, "species": "mRNA", "value": m, "condition": condition})
+        records.append({"time_h": t, "species": "protein", "value": p, "condition": condition})
+
+        dm_dt = alpha - delta_m * m
+        dp_dt = k_tl * m - delta_p * p
+
+        m = m + dt * dm_dt
+        p = p + dt * dp_dt
+
+    return pd.DataFrame(records)
+
+two_stage_df = simulate_mrna_protein(
+    alpha=6.0,
+    delta_m=2.0,
+    k_tl=3.0,
+    delta_p=0.4,
+)
+
+two_stage_df.head()
+```
+
+Again, this is tidy data.
+
+Each row contains:
+
+- one time point
+- one species
+- one value
+- one condition
+
+That structure is flexible enough for plotting and analysis.
+
+```{python}
+plt.figure(figsize=(7, 4))
+for species, subset in two_stage_df.groupby("species"):
+    plt.plot(subset["time_h"], subset["value"], label=species)
+
+plt.xlabel("Time (h)")
+plt.ylabel("Amount")
+plt.title("mRNA rises and saturates before protein")
+plt.legend()
+plt.show()
+```
+
+Typically, mRNA responds faster because its turnover is faster.
+
+Protein often lags behind.
+
+That delay matters when designing dynamic circuits.
+
+## Comparing promoter strengths
+
+Suppose we want to compare a weak, medium, and strong promoter.
+
+In this simple model, we can do that by changing `\alpha`, the transcription rate.
+
+```{python}
+promoter_sweep = pd.concat(
+    [
+        simulate_mrna_protein(2.5, 2.0, 3.0, 0.4, condition="weak promoter"),
+        simulate_mrna_protein(6.0, 2.0, 3.0, 0.4, condition="medium promoter"),
+        simulate_mrna_protein(10.0, 2.0, 3.0, 0.4, condition="strong promoter"),
+    ],
+    ignore_index=True,
+)
+
+protein_only = promoter_sweep[promoter_sweep["species"] == "protein"]
+protein_only.head()
+```
+
+```{python}
+plt.figure(figsize=(7, 4))
+for condition, subset in protein_only.groupby("condition"):
+    plt.plot(subset["time_h"], subset["value"], label=condition)
+
+plt.xlabel("Time (h)")
+plt.ylabel("Protein amount")
+plt.title("Promoter strength changes protein dynamics")
+plt.legend()
+plt.show()
+```
+
+This is a very common modeling use case.
+
+Before building three constructs, we can explore whether the expected response differences are likely to be large enough to matter.
+
+## Induction and Hill functions
+
+So far, production has been constant.
+
+But many synthetic biology systems are regulated.
+
+A promoter may respond to an inducer, a repressor, or an activator.
+
+A common approximation is the **Hill function**.
+
+### Activation
+
+A simple activation function is:
+
+\[
+\text{activation}(x) = \frac{x^n}{K^n + x^n}
+\]
+
+where:
+
+- `x` is inducer or activator concentration
+- `K` is the half-response concentration
+- `n` is the Hill coefficient
+
+### Repression
+
+A simple repression function is:
+
+\[
+\text{repression}(x) = \frac{K^n}{K^n + x^n}
+\]
+
+These functions are not perfect descriptions of every promoter.
+
+But they are extremely useful approximations.
+
+## Coding Hill functions
+
+```{python}
+def hill_activation(x, K, n):
+    x = np.asarray(x, dtype=float)
+    return (x**n) / (K**n + x**n)
+
+
+def hill_repression(x, K, n):
+    x = np.asarray(x, dtype=float)
+    return (K**n) / (K**n + x**n)
+
+inducer = np.linspace(0, 100, 201)
+activation = hill_activation(inducer, K=20, n=2)
+repression = hill_repression(inducer, K=20, n=2)
+
+hill_df = pd.DataFrame(
+    {
+        "inducer_uM": np.concatenate([inducer, inducer]),
+        "response": np.concatenate([activation, repression]),
+        "relationship": ["activation"] * len(inducer) + ["repression"] * len(inducer),
+    }
+)
+
+hill_df.head()
+```
+
+```{python}
+plt.figure(figsize=(7, 4))
+for relationship, subset in hill_df.groupby("relationship"):
+    plt.plot(subset["inducer_uM"], subset["response"], label=relationship)
+
+plt.xlabel("Inducer concentration (uM)")
+plt.ylabel("Normalized response")
+plt.title("Hill activation and repression")
+plt.legend()
+plt.show()
+```
+
+A Hill coefficient of `n = 1` gives a gentler curve.
+
+A larger `n` makes the response steeper.
+
+That can matter a lot when designing threshold-like behavior.
+
+## Linking induction to protein production
+
+We can plug a Hill activation function into our expression model.
+
+Suppose a promoter has a maximum transcription rate `alpha_max`, and induction controls what fraction of that maximum is active.
+
+Then we might write:
+
+\[
+\alpha(x) = \alpha_{max} \cdot \frac{x^n}{K^n + x^n}
+\]
+
+Let us compute a steady-state dose-response curve for protein.
+
+In the simple production-loss model, steady state is `P^* = \beta / \gamma`.
+
+If we treat `\beta` as an inducer-dependent production term, we can sweep across inducer values.
+
+```{python}
+alpha_max = 12.0
+gamma = 0.6
+inducer_values = np.linspace(0, 100, 41)
+
+response_records = []
+for x in inducer_values:
+    beta_x = alpha_max * hill_activation(x, K=20, n=2)
+    p_ss = beta_x / gamma
+    response_records.append(
+        {
+            "inducer_uM": x,
+            "steady_state_protein": p_ss,
+            "K": 20,
+            "hill_n": 2,
+        }
+    )
+
+dose_response_df = pd.DataFrame(response_records)
+dose_response_df.head()
+```
+
+```{python}
+plt.figure(figsize=(7, 4))
+plt.plot(dose_response_df["inducer_uM"], dose_response_df["steady_state_protein"])
+plt.xlabel("Inducer concentration (uM)")
+plt.ylabel("Steady-state protein")
+plt.title("Dose-response curve from a Hill-regulated promoter")
+plt.show()
+```
+
+This is a classic synthetic biology use case.
+
+You can think of the model as a way to connect:
+
+- inducer concentration
+- promoter activity
+- expression level
+
+## Parameter sweeps should also be tidy
+
+From this point onward, parameter sweeps should be stored tidily too.
+
+Let us compare different Hill coefficients.
+
+```{python}
+parameter_sweep_records = []
+
+for n_value in [1, 2, 4]:
+    for x in inducer_values:
+        beta_x = alpha_max * hill_activation(x, K=20, n=n_value)
+        p_ss = beta_x / gamma
+        parameter_sweep_records.append(
+            {
+                "inducer_uM": x,
+                "steady_state_protein": p_ss,
+                "hill_n": n_value,
+                "K": 20,
+                "parameter": "hill_n",
+            }
+        )
+
+parameter_sweep_df = pd.DataFrame(parameter_sweep_records)
+parameter_sweep_df.head()
+```
+
+```{python}
+plt.figure(figsize=(7, 4))
+for hill_n, subset in parameter_sweep_df.groupby("hill_n"):
+    plt.plot(subset["inducer_uM"], subset["steady_state_protein"], label=f"n={hill_n}")
+
+plt.xlabel("Inducer concentration (uM)")
+plt.ylabel("Steady-state protein")
+plt.title("Hill coefficient changes response steepness")
+plt.legend()
+plt.show()
+```
+
+Now the sweep lives in a tidy table, so we can summarize it easily.
+
+For example, what inducer concentration first reaches at least half-maximal output?
+
+```{python}
+half_max_summary = []
+max_output = parameter_sweep_df["steady_state_protein"].max()
+
+for hill_n, subset in parameter_sweep_df.groupby("hill_n"):
+    threshold = subset["steady_state_protein"].max() / 2
+    above = subset[subset["steady_state_protein"] >= threshold]
+    first_crossing = above["inducer_uM"].min()
+    half_max_summary.append({"hill_n": hill_n, "half_max_inducer_uM": first_crossing})
+
+half_max_df = pd.DataFrame(half_max_summary)
+half_max_df
+```
+
+## Simulating an induction time course
+
+A dose-response curve tells us steady-state behavior.
+
+But sometimes we care about dynamics after induction.
+
+We can simulate a protein model where the production rate depends on inducer concentration.
+
+```{python}
+def simulate_induced_protein(inducer_uM, alpha_max, K, n, gamma, t_end=12, dt=0.1, condition=None):
+    if condition is None:
+        condition = f"inducer={inducer_uM}"
+
+    beta = alpha_max * hill_activation(inducer_uM, K=K, n=n)
+    return simulate_protein(beta=beta, gamma=gamma, t_end=t_end, dt=dt, condition=condition)
+
+induction_timecourse_df = pd.concat(
+    [
+        simulate_induced_protein(0, 12.0, 20, 2, 0.6, condition="0 uM"),
+        simulate_induced_protein(10, 12.0, 20, 2, 0.6, condition="10 uM"),
+        simulate_induced_protein(30, 12.0, 20, 2, 0.6, condition="30 uM"),
+        simulate_induced_protein(100, 12.0, 20, 2, 0.6, condition="100 uM"),
+    ],
+    ignore_index=True,
+)
+
+induction_timecourse_df.head()
+```
+
+```{python}
+plt.figure(figsize=(7, 4))
+for condition, subset in induction_timecourse_df.groupby("condition"):
+    plt.plot(subset["time_h"], subset["value"], label=condition)
+
+plt.xlabel("Time (h)")
+plt.ylabel("Protein amount")
+plt.title("Induction level changes dynamic trajectories")
+plt.legend()
+plt.show()
+```
+
+This kind of result helps answer practical design questions.
+
+For example:
+
+- is basal expression acceptably low?
+- does the induced state separate enough from the uninduced state?
+- how long must we wait before measuring fluorescence?
+
+## A note on deterministic vs stochastic models
+
+Everything we have done so far is **deterministic**.
+
+That means the model gives the same answer every time for the same parameters and initial conditions.
+
+Real gene expression is often noisy.
+
+At low copy number, stochastic effects can matter a lot.
+
+So why start with deterministic models?
+
+Because they are often the right first step.
+
+They help us understand:
+
+- the average behavior
+- the role of parameters
+- the structure of a design
+- whether a system is even plausible before adding more realism
+
+Later, you may want stochastic simulation, Bayesian inference, or parameter estimation from data.
+
+But deterministic models are the right foundation.
+
+## Choosing the right level of model complexity
+
+Not every project needs the same model.
+
+A useful rule of thumb is:
+
+- start with the simplest model that can answer your question
+- add complexity only when the simpler model fails meaningfully
+
+For example:
+
+Use a one-variable production-loss model when you care about:
+
+- rough accumulation times
+- steady-state scaling
+- promoter strength comparisons
+
+Use a two-stage mRNA-protein model when you care about:
+
+- transcription vs translation separately
+- delays between RNA and protein
+- RNA instability
+
+Use regulated production with Hill functions when you care about:
+
+- induction curves
+- repression curves
+- threshold behavior
+- dose-response tuning
+
+A model is not better because it has more equations.
+
+A model is better when it is better matched to the question.
+
+## Exercises
+
+1. Change the degradation rate `gamma` in the one-variable model and measure how long it takes to reach 90% of steady state.
+2. Modify the two-stage model so that the initial mRNA amount is nonzero. How does that change early protein accumulation?
+3. Compare two proteins with the same production rate but different degradation rates. Which one is faster? Which one reaches a higher steady state?
+4. Repeat the Hill-function sweep with different values of `K`. How does `K` shift the response curve?
+5. Build a tidy parameter sweep over both `K` and `n`, and summarize the final steady-state protein values.
+6. Add a constant leak term to the induced production model and examine basal expression.
+7. Save one of your simulated tidy tables to CSV for later analysis.
+
+## Recap
+
+In this chapter, we introduced practical modeling of gene expression in Python.
+
+The most important ideas are:
+
+- models turn biological stories into quantitative rules
+- production-loss models already explain steady states and response times
+- Euler's method lets us simulate models numerically
+- simulated outputs should be stored in **tidy data** format just like experimental data
+- two-stage mRNA-protein models add biological realism while staying manageable
+- Hill functions are a practical way to model activation and repression
+- tidy parameter sweeps make it easy to compare design choices systematically
+
+From this point onward, we will treat simulated tables the same way we treat experimental ones:
+
+- each row should represent one observation
+- variables should live in columns
+- conditions and parameters should be explicit
+- tidy data remains the default format for downstream analysis
+
+That consistency is important.
+
+It means the same Python tools can support both modeling and experiments, which is exactly what we want in synthetic biology.

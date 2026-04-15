@@ -1,21 +1,633 @@
-# Jupyter and Reproducibility
+# Jupyter, Files, and Reproducibility
 
-## Draft focus
+By the end of the previous chapter, you can already write small Python programs.
 
-Introduce notebooks, scripts, environments, and the difference between exploratory work and reusable workflows.
+That is an important milestone, but it is not enough for real scientific work.
 
-## Starter example
+In research, code lives inside a larger workflow. You write in a notebook, save files, clean data, rerun analyses, revise plots, and send results to collaborators. A script that works once on your laptop is useful. A workflow that another person can rerun next month is much more useful.
+
+This chapter is about that second level of practice.
+
+We will introduce four ideas that belong together:
+
+- **Jupyter notebooks** for exploration and explanation
+- **files and folders** as the raw material of analysis
+- **environments** for keeping software dependencies under control
+- **reproducibility** as a habit of working, not only a technical trick
+
+These topics may look less glamorous than modeling circuits or designing constructs, but they make the difference between fragile code and trustworthy research.
+
+## Code in science has more than one form
+
+A beginner often imagines that programming means writing one kind of thing: a program.
+
+In practice, scientific Python work usually appears in three complementary forms.
+
+### Scripts
+
+A script is a file that runs a sequence of steps from top to bottom.
+
+Scripts are good when you want to:
+
+- clean raw data the same way every time
+- rename or reorganize files
+- process a batch of sequences
+- turn a manual analysis into a repeatable workflow
+
+Scripts are especially useful once a task stops being exploratory and starts becoming routine.
+
+### Notebooks
+
+A notebook mixes code, output, equations, and prose. It is ideal for:
+
+- trying ideas quickly
+- inspecting intermediate results
+- teaching or documenting a workflow
+- producing a shareable computational narrative
+
+That is why notebooks became so popular in biology, data science, and quantitative research. They let you think with code in public.
+
+### Rendered documents
+
+A rendered document, such as a Quarto chapter or report, takes reproducibility one step further. Instead of a notebook that only runs interactively, you can create a document that executes code and produces a polished output in HTML or PDF.
+
+That is one reason Quarto is a good fit for this book. It encourages a workflow in which explanation and computation live together.
+
+A healthy research project often uses all three:
+
+- notebooks for exploration
+- scripts for reusable tasks
+- rendered reports or book chapters for communication
+
+## Why notebooks became so influential
+
+Jupyter notebooks are not just popular because they are convenient. They match the real rhythm of experimental reasoning.
+
+When you are characterizing a promoter library, you rarely know the entire analysis in advance. You want to:
+
+1. load the data
+2. inspect a few rows
+3. notice a suspicious value
+4. clean the data
+5. recompute a summary
+6. try a different normalization
+7. make a quick plot
+8. write down what you learned
+
+That loop of *inspect, modify, rerun, interpret* is exactly what notebooks are good at.
+
+They are especially valuable for beginners because they reduce the distance between writing code and seeing what it does.
+
+## Your computational environment matters
+
+When scientists say, "the code works on my machine," they often mean something narrower than they realize. The code works with:
+
+- a particular Python version
+- a particular set of installed packages
+- a particular folder layout
+- a particular set of input files
+- a particular order of execution
+
+Reproducibility means making those assumptions visible and manageable.
+
+Let us start by asking Python about itself.
 
 ```{python}
 import platform
 import sys
+from pathlib import Path
+import tempfile
+
+chapter3_demo_dir = Path(tempfile.mkdtemp(prefix="synbio_ch3_"))
 
 {
+    "python_executable": sys.executable,
     "python_version": sys.version.split()[0],
     "platform": platform.platform(),
+    "demo_directory": str(chapter3_demo_dir),
 }
 ```
 
-## Draft note
+This kind of information is boring until something breaks. Then it becomes extremely valuable.
 
-Connect reproducibility to lab culture, not only to software best practices.
+If a collaborator cannot run your notebook, one of the first questions is: *Are we even using the same Python environment?*
+
+## Virtual environments: keeping projects separate
+
+A virtual environment is an isolated Python installation for a specific project.
+
+Why bother with that?
+
+Because scientific projects accumulate dependencies. One analysis may need a recent version of `pandas`. Another may depend on an older version of a modeling package. If everything is installed globally, projects start interfering with each other.
+
+A virtual environment gives each project its own small software world.
+
+A typical setup looks like this:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install jupyter
+```
+
+On Windows PowerShell, the activation command is different:
+
+```powershell
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+py -m pip install jupyter
+```
+
+The point is not the exact command syntax. The point is the habit:
+
+- create an environment per project
+- activate it before you work
+- install dependencies into that environment
+- record those dependencies when the project matures
+
+That habit prevents a surprising amount of pain.
+
+## A reproducible project has a shape
+
+Reproducibility is easier when your work lives in a predictable folder structure.
+
+A small research project might look like this:
+
+```text
+project/
+├── data/
+│   ├── raw/
+│   └── processed/
+├── notebooks/
+├── scripts/
+├── results/
+├── figures/
+└── README.md
+```
+
+You do not need to be rigid about this exact layout. What matters is the principle:
+
+- **raw data** should stay separate from modified data
+- **scripts** should be kept under version control
+- **results** should be regenerable from code
+- **README files** should explain what the project is and how to run it
+
+A folder structure is not just organizational. It is a model of how work flows through the project.
+
+## Paths are part of scientific thinking
+
+Beginners often treat file paths as annoying details. In reality, paths are how your code locates the world.
+
+Python's `pathlib` module makes path handling much clearer than manual string concatenation.
+
+```{python}
+raw_dir = chapter3_demo_dir / "data" / "raw"
+processed_dir = chapter3_demo_dir / "data" / "processed"
+results_dir = chapter3_demo_dir / "results"
+
+for directory in [raw_dir, processed_dir, results_dir]:
+    directory.mkdir(parents=True, exist_ok=True)
+
+sorted(str(path.relative_to(chapter3_demo_dir)) for path in chapter3_demo_dir.iterdir())
+```
+
+The `/` operator in `pathlib` joins path components in a readable way. This is much safer than manually building strings like `"data/raw/file.csv"`, especially if you want your code to work across operating systems.
+
+Let us create a file path for a plate-reader export.
+
+```{python}
+plate_reader_file = raw_dir / "plate_reader_day1.csv"
+plate_reader_file
+```
+
+That object is not just text. It is a `Path`, which means Python can use it directly for reading, writing, testing existence, and more.
+
+## Writing a small dataset to disk
+
+To understand reproducibility, it helps to work with real files rather than only in-memory objects.
+
+Here we will create a tiny synthetic dataset that resembles growth and fluorescence measurements from a characterization experiment.
+
+```{python}
+import csv
+
+rows_to_write = [
+    {"sample": "A1", "construct": "pTac-GFP", "condition": "glucose",  "od600": 0.81, "fluorescence": 15230},
+    {"sample": "A2", "construct": "pTac-GFP", "condition": "glycerol", "od600": 0.77, "fluorescence": 14120},
+    {"sample": "B1", "construct": "pTet-GFP", "condition": "glucose",  "od600": 0.79, "fluorescence": 11340},
+    {"sample": "B2", "construct": "pTet-GFP", "condition": "glycerol", "od600": 0.74, "fluorescence": 12600},
+]
+
+with plate_reader_file.open("w", newline="") as handle:
+    writer = csv.DictWriter(
+        handle,
+        fieldnames=["sample", "construct", "condition", "od600", "fluorescence"],
+    )
+    writer.writeheader()
+    writer.writerows(rows_to_write)
+
+plate_reader_file.exists(), plate_reader_file.stat().st_size
+```
+
+Now the dataset lives in a file, not only in the notebook state.
+
+That distinction matters. A notebook variable disappears when the kernel restarts. A file can be rerun, versioned, shared, and inspected independently.
+
+## Reading data back in
+
+A reproducible workflow should be able to reconstruct its analysis from saved inputs.
+
+```{python}
+with plate_reader_file.open() as handle:
+    reader = csv.DictReader(handle)
+    measurements = list(reader)
+
+measurements[:2]
+```
+
+Notice the same issue we saw in the previous chapter: CSV values come in as strings.
+
+That means data cleaning begins immediately.
+
+```{python}
+for row in measurements:
+    row["od600"] = float(row["od600"])
+    row["fluorescence"] = int(row["fluorescence"])
+    row["expression_per_od"] = row["fluorescence"] / row["od600"]
+
+measurements
+```
+
+Already we can see a core pattern of computational biology:
+
+1. load raw data
+2. standardize types
+3. derive new quantities
+4. save or report the result
+
+## Notebook state is helpful and dangerous
+
+A notebook remembers what you have already run.
+
+That is incredibly helpful during exploration, but it also creates one of the most common sources of confusion for beginners: **hidden state**.
+
+Suppose you define a threshold.
+
+```{python}
+qc_threshold = 0.76
+[row["sample"] for row in measurements if row["od600"] >= qc_threshold]
+```
+
+Now imagine that, twenty minutes later, you redefine that threshold in another cell.
+
+```{python}
+qc_threshold = 0.80
+[row["sample"] for row in measurements if row["od600"] >= qc_threshold]
+```
+
+Nothing about the data changed. Only the notebook state changed.
+
+This is one reason people get different answers from the "same notebook." They are not always running the same sequence of cells.
+
+Two habits reduce this problem dramatically:
+
+- restart the kernel and run all cells from top to bottom
+- keep important parameters near the top of the notebook or report
+
+A notebook becomes much more trustworthy when it can be executed cleanly from a fresh start.
+
+## Small functions make notebooks stronger
+
+A notebook should not become a wall of ad hoc code. Even in exploratory work, small functions help isolate logic and reduce mistakes.
+
+Let us define a reusable normalization function.
+
+```{python}
+def normalize_expression(row: dict) -> float:
+    if row["od600"] <= 0:
+        raise ValueError("OD600 must be positive for normalization")
+    return row["fluorescence"] / row["od600"]
+
+
+[round(normalize_expression(row), 1) for row in measurements]
+```
+
+And let us use it to build a cleaner processed dataset.
+
+```{python}
+processed_measurements = []
+
+for row in measurements:
+    processed_measurements.append(
+        {
+            "sample": row["sample"],
+            "construct": row["construct"],
+            "condition": row["condition"],
+            "od600": row["od600"],
+            "fluorescence": row["fluorescence"],
+            "expression_per_od": round(normalize_expression(row), 2),
+            "passed_qc": row["od600"] >= 0.76,
+        }
+    )
+
+processed_measurements
+```
+
+This is more reproducible than manually editing columns in a spreadsheet, because the transformation is explicit and rerunnable.
+
+## Saving processed data
+
+A project is easier to debug when you save important intermediate results.
+
+Let us write the processed dataset to a new file.
+
+```{python}
+processed_file = processed_dir / "plate_reader_day1_processed.csv"
+
+with processed_file.open("w", newline="") as handle:
+    writer = csv.DictWriter(
+        handle,
+        fieldnames=[
+            "sample",
+            "construct",
+            "condition",
+            "od600",
+            "fluorescence",
+            "expression_per_od",
+            "passed_qc",
+        ],
+    )
+    writer.writeheader()
+    writer.writerows(processed_measurements)
+
+processed_file.exists(), processed_file.name
+```
+
+And we can confirm its contents.
+
+```{python}
+with processed_file.open() as handle:
+    print(handle.read())
+```
+
+This is a good habit for larger workflows too. Raw data should remain intact, while processed data should be clearly labeled as derived.
+
+## Saving metadata alongside results
+
+Reproducibility is not only about data values. It is also about context.
+
+For example, if you save processed results, you may also want to save:
+
+- when the analysis was run
+- which Python version was used
+- which QC threshold was applied
+- which input file was analyzed
+
+JSON is a convenient format for lightweight metadata.
+
+```{python}
+import json
+from datetime import datetime, timezone
+
+metadata = {
+    "created_at_utc": datetime.now(timezone.utc).isoformat(),
+    "python_version": sys.version.split()[0],
+    "input_file": str(plate_reader_file),
+    "output_file": str(processed_file),
+    "qc_threshold": 0.76,
+    "n_rows": len(processed_measurements),
+}
+
+metadata_file = results_dir / "analysis_metadata.json"
+metadata_file.write_text(json.dumps(metadata, indent=2))
+
+print(metadata_file.read_text())
+```
+
+A month later, that metadata can answer questions you will no longer remember reliably.
+
+## Summaries should be reproducible too
+
+A common mistake is to make processed data reproducible but leave final summaries manual.
+
+Instead, summaries should also come from code.
+
+```{python}
+def mean(values):
+    return sum(values) / len(values)
+
+summary_by_construct = {}
+
+for row in processed_measurements:
+    construct = row["construct"]
+    summary_by_construct.setdefault(construct, []).append(row["expression_per_od"])
+
+summary_table = []
+for construct, values in summary_by_construct.items():
+    summary_table.append(
+        {
+            "construct": construct,
+            "mean_expression_per_od": round(mean(values), 2),
+            "n_measurements": len(values),
+        }
+    )
+
+summary_table
+```
+
+Now let us save that summary as well.
+
+```{python}
+summary_file = results_dir / "summary_by_construct.csv"
+
+with summary_file.open("w", newline="") as handle:
+    writer = csv.DictWriter(
+        handle,
+        fieldnames=["construct", "mean_expression_per_od", "n_measurements"],
+    )
+    writer.writeheader()
+    writer.writerows(summary_table)
+
+print(summary_file.read_text())
+```
+
+At this point we have a tiny but genuine workflow:
+
+- raw data file
+- processing step
+- QC rule
+- processed output
+- summary output
+- metadata file
+
+That is the beginning of a reproducible analysis pipeline.
+
+## Randomness should be controlled when it matters
+
+Biology contains real randomness, and computational biology often uses simulated randomness too.
+
+If you use randomness in code, reproducibility may require fixing a seed.
+
+```{python}
+import random
+
+random.seed(7)
+[random.randint(80, 120) for _ in range(5)]
+```
+
+If we reset the seed and run the same code again, we get the same result.
+
+```{python}
+random.seed(7)
+[random.randint(80, 120) for _ in range(5)]
+```
+
+This does not remove randomness from the concept. It simply makes the computational sequence reproducible.
+
+That can be important for:
+
+- sampling procedures
+- simulation studies
+- train/test splits in machine learning
+- randomized search or optimization
+
+## Reproducibility is social as well as technical
+
+It is tempting to frame reproducibility as a purely software issue: use environments, save files, set seeds, and the problem is solved.
+
+But reproducibility is also social.
+
+A reproducible project is easier to hand off to:
+
+- a new student joining the lab
+- a collaborator at another institution
+- your future self after six months
+- a reviewer asking how a result was generated
+
+This means good research code usually includes not only code, but also explanation.
+
+A small `README.md` that answers the following questions is often worth far more than another clever function:
+
+- What does this project do?
+- Where are the inputs?
+- How do I run the analysis?
+- What files are generated?
+- Which environment should I use?
+
+In other words, reproducibility is a communication practice.
+
+## Notebooks versus scripts: when to use each
+
+This is not a battle where one tool must win.
+
+A practical rule is:
+
+- use a **notebook** when you are exploring or teaching
+- use a **script** when a process should run the same way every time
+- use a **rendered document** when you want reproducible explanation plus output
+
+Often the best workflow is sequential:
+
+1. explore in a notebook
+2. notice which steps have stabilized
+3. move stable logic into functions or scripts
+4. call those functions from a notebook or Quarto report
+
+That pattern keeps notebooks flexible without letting them become chaotic.
+
+## How Quarto fits into this workflow
+
+This book is written in Quarto rather than in a plain notebook interface.
+
+That choice reflects an important idea: scientific code should often be both executable and readable.
+
+Quarto lets you:
+
+- write prose around the code
+- execute code when rendering
+- include outputs directly in the final document
+- treat the chapter itself as part of the reproducible workflow
+
+In that sense, a Quarto chapter is not only a teaching document. It is also a compact example of literate scientific programming.
+
+## A full miniature workflow in one view
+
+Let us collect the main generated files so we can see what our demo project produced.
+
+```{python}
+sorted(str(path.relative_to(chapter3_demo_dir)) for path in chapter3_demo_dir.rglob("*") if path.is_file())
+```
+
+That file list is small, but it encodes a real computational story.
+
+- We created a raw measurement file.
+- We read and cleaned it.
+- We derived normalized quantities.
+- We saved processed data.
+- We saved summary results.
+- We saved metadata about the analysis itself.
+
+That is already much closer to real scientific computing than a few isolated code fragments.
+
+## Common beginner mistakes in reproducible work
+
+### Hard-coding machine-specific paths
+
+This is fragile:
+
+```python
+file_path = "/Users/your_name/Desktop/final_real_data_NEW.csv"
+```
+
+Machine-specific paths break immediately for collaborators and often break for you later.
+
+Prefer project-relative paths built with `pathlib`.
+
+### Editing raw data in place
+
+If the only copy of a raw file has been manually modified, you have already lost part of the provenance of the analysis.
+
+Keep raw data separate from processed outputs.
+
+### Forgetting which cell created a result
+
+Notebook state can hide missing steps. Restarting and running all cells is one of the simplest and most effective integrity checks.
+
+### Installing packages globally without tracking them
+
+That makes it hard to recreate the analysis environment later. Use project-specific environments whenever possible.
+
+### Mixing exploration with final reporting carelessly
+
+Exploration is messy, and that is normal. But final results should come from a workflow that can be rerun deliberately.
+
+## Practice ideas
+
+Try modifying the workflow in concrete ways.
+
+- Add a third construct and rerun the summary.
+- Change the QC threshold and regenerate the processed file.
+- Add a `replicate` column to the raw dataset.
+- Save a second metadata field recording the research question.
+- Write a function that filters out rows failing QC before computing the summary.
+
+Each of these is small, but each pushes you toward more deliberate analysis.
+
+## Exercises
+
+1. Create a new temporary project directory with subfolders `data/raw`, `data/processed`, and `results` using `pathlib`.
+2. Write a CSV file containing three sequence records with columns `name` and `sequence`, then read it back into Python.
+3. Add a new column called `gc_fraction` to the sequence records and save the processed table.
+4. Save a JSON metadata file containing the input file path, output file path, and Python version.
+5. Simulate ten random fluorescence values with a fixed seed and compute their mean.
+6. Explain in your own words why restarting and running all cells is an important notebook habit.
+
+## Key ideas from this chapter
+
+- Scientific Python work usually combines notebooks, scripts, and rendered reports.
+- Reproducibility depends on environments, folder structure, files, and execution order.
+- `pathlib` makes file handling clearer and safer.
+- Raw data, processed data, summaries, and metadata should be separated intentionally.
+- Notebook state is powerful, but hidden state can produce misleading results.
+- Small functions and saved outputs make analysis workflows easier to trust and share.
+- Reproducibility is not only technical; it is also a way of communicating research clearly.

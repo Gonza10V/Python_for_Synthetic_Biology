@@ -1,21 +1,487 @@
 # Tabular Experimental Data
 
-## Draft focus
+Most synthetic biology projects do not begin with a model.
 
-Introduce `pandas` through fluorescence, growth, induction, and metadata tables.
+They begin with a table.
 
-## Starter example
+You grow strains, induce cultures, measure fluorescence, record optical density, annotate constructs, and export the results from an instrument or a spreadsheet. Very quickly, your work becomes a problem of **tabular data management**.
+
+That is why `pandas` is one of the most useful Python libraries for synthetic biology. It gives us a way to read, clean, reshape, summarize, and save experimental data without leaving Python.
+
+In this chapter, we will introduce `pandas` through the kinds of tables that appear constantly in biology:
+
+- fluorescence measurements
+- growth measurements
+- induction assays
+- construct metadata
+- replicate-level observations
+- summary tables for downstream analysis
+
+This chapter also introduces one of the most important habits for scientific computing: **tidy data**.
+
+Once we introduce tidy data, we will use it as the default tabular format for the rest of the book.
+
+## Why tidy data matters
+
+A table can be easy for a human to read but hard for code to analyze.
+
+That tension appears everywhere in biology. Instrument exports, manually assembled spreadsheets, and presentation-ready summary tables are often arranged for human inspection rather than computation.
+
+A tidy table follows a simple idea:
+
+- each **row** is one observation
+- each **column** is one variable
+- each type of observational unit gets its own table
+
+For a fluorescence induction experiment, one observation might be:
+
+- one strain
+- at one inducer concentration
+- at one time point
+- for one replicate
+
+In a tidy table, those properties become columns.
+
+That might sound abstract, so let us start with a non-tidy example.
+
+## A wide table is often the first thing you get
+
+Suppose a plate reader exports fluorescence values like this.
 
 ```{python}
 import pandas as pd
 
-df = pd.DataFrame(
+wide_data = pd.DataFrame(
     {
-        "sample": ["A", "B", "C"],
-        "fluorescence": [1200, 3400, 2900],
-        "od600": [0.4, 0.8, 0.7],
+        "time_h": [0, 2, 4],
+        "WT_rep1": [120, 135, 140],
+        "WT_rep2": [118, 132, 141],
+        "Sensor_rep1": [125, 410, 980],
+        "Sensor_rep2": [130, 430, 1020],
     }
 )
 
-df.assign(norm_fluorescence=df["fluorescence"] / df["od600"])
+wide_data
 ```
+
+A human can read this table easily, but the column names are mixing several different variables together:
+
+- strain identity
+- replicate identity
+- measurement value
+
+That makes downstream analysis awkward.
+
+For example, imagine asking any of these questions:
+
+- what is the mean fluorescence for each strain at each time point?
+- how much variation is there across replicates?
+- can we merge this table with construct metadata?
+- can we plot all strains with a common grammar later?
+
+Those operations become easier when the table is tidy.
+
+## Reshaping wide data into tidy data
+
+We can use `melt()` to convert the wide table into a longer, tidier format.
+
+```{python}
+tidy_from_wide = wide_data.melt(
+    id_vars="time_h",
+    var_name="sample",
+    value_name="fluorescence",
+)
+
+tidy_from_wide
+```
+
+Now each row is closer to a single observation, but the `sample` column still combines two variables: strain and replicate.
+
+We can separate them.
+
+```{python}
+parsed = tidy_from_wide["sample"].str.extract(r"(?P<strain>.+)_rep(?P<replicate>\d+)")
+
+tidy_from_wide = pd.concat([tidy_from_wide, parsed], axis=1)
+tidy_from_wide["replicate"] = tidy_from_wide["replicate"].astype(int)
+
+tidy_from_wide = tidy_from_wide[["time_h", "strain", "replicate", "fluorescence"]]
+
+tidy_from_wide
+```
+
+This new table is much better for computation:
+
+- one row is one measurement
+- `time_h`, `strain`, and `replicate` are explicit variables
+- `fluorescence` is the measured value
+
+From this point onward in the book, we will prefer this style.
+
+When we talk about experimental tables, assume that we want them in **tidy format** unless there is a strong reason not to.
+
+## Building a tidy experiment table
+
+Let us create a slightly richer dataset. This time, each row will represent one observation from an induction experiment.
+
+```{python}
+experiment = pd.DataFrame(
+    [
+        {"strain": "WT", "inducer_mM": 0.0, "time_h": 4, "replicate": 1, "od600": 0.82, "fluorescence": 145},
+        {"strain": "WT", "inducer_mM": 0.0, "time_h": 4, "replicate": 2, "od600": 0.80, "fluorescence": 150},
+        {"strain": "WT", "inducer_mM": 1.0, "time_h": 4, "replicate": 1, "od600": 0.81, "fluorescence": 152},
+        {"strain": "WT", "inducer_mM": 1.0, "time_h": 4, "replicate": 2, "od600": 0.79, "fluorescence": 149},
+        {"strain": "Sensor", "inducer_mM": 0.0, "time_h": 4, "replicate": 1, "od600": 0.77, "fluorescence": 210},
+        {"strain": "Sensor", "inducer_mM": 0.0, "time_h": 4, "replicate": 2, "od600": 0.75, "fluorescence": 220},
+        {"strain": "Sensor", "inducer_mM": 1.0, "time_h": 4, "replicate": 1, "od600": 0.78, "fluorescence": 920},
+        {"strain": "Sensor", "inducer_mM": 1.0, "time_h": 4, "replicate": 2, "od600": 0.76, "fluorescence": 980},
+        {"strain": "Amplifier", "inducer_mM": 0.0, "time_h": 4, "replicate": 1, "od600": 0.73, "fluorescence": 260},
+        {"strain": "Amplifier", "inducer_mM": 0.0, "time_h": 4, "replicate": 2, "od600": 0.72, "fluorescence": 255},
+        {"strain": "Amplifier", "inducer_mM": 1.0, "time_h": 4, "replicate": 1, "od600": 0.74, "fluorescence": 1380},
+        {"strain": "Amplifier", "inducer_mM": 1.0, "time_h": 4, "replicate": 2, "od600": 0.71, "fluorescence": 1415},
+    ]
+)
+
+experiment
+```
+
+This is the kind of structure that ages well.
+
+A tidy table like this is easy to:
+
+- filter by strain or condition
+- normalize measurements
+- group replicates
+- compute summaries
+- merge with metadata
+- write back to disk
+
+## Inspecting a DataFrame
+
+A `pandas` table is called a **DataFrame**.
+
+Some of the first things we usually check are the size, column names, and data types.
+
+```{python}
+experiment.shape
+```
+
+```{python}
+experiment.columns.tolist()
+```
+
+```{python}
+experiment.dtypes
+```
+
+And for a quick preview:
+
+```{python}
+experiment.head()
+```
+
+This may feel routine, but it is part of good scientific hygiene. A surprising amount of debugging is simply discovering that a column has the wrong type or an unexpected name.
+
+## Selecting columns
+
+Column selection is straightforward.
+
+```{python}
+experiment["fluorescence"]
+```
+
+To select multiple columns, pass a list of names.
+
+```{python}
+experiment[["strain", "inducer_mM", "fluorescence"]]
+```
+
+This is useful when you want to focus on a subset of variables without modifying the original table.
+
+## Filtering rows
+
+Because our table is tidy, filtering becomes very natural.
+
+```{python}
+sensor_only = experiment[experiment["strain"] == "Sensor"]
+sensor_only
+```
+
+We can combine conditions too.
+
+```{python}
+induced_sensor = experiment[
+    (experiment["strain"] == "Sensor") & (experiment["inducer_mM"] == 1.0)
+]
+
+induced_sensor
+```
+
+That one line already expresses a biologically meaningful question: show me the induced measurements for the sensor strain.
+
+Sorting is equally common.
+
+```{python}
+experiment.sort_values(["strain", "inducer_mM", "replicate"])
+```
+
+## Adding derived columns
+
+Raw fluorescence is often less informative than fluorescence normalized by culture density.
+
+A common first pass is to divide by OD600.
+
+```{python}
+experiment = experiment.assign(
+    norm_fluorescence=experiment["fluorescence"] / experiment["od600"]
+)
+
+experiment[["strain", "inducer_mM", "replicate", "norm_fluorescence"]]
+```
+
+This is a good example of why tidy data helps. Each row already contains the variables required for the calculation, so adding a derived column is simple and transparent.
+
+## Grouping and summarizing replicates
+
+Biological experiments almost always involve replicate measurements.
+
+A tidy table makes grouped summaries very convenient.
+
+```{python}
+summary = (
+    experiment.groupby(["strain", "inducer_mM"])
+    .agg(
+        n=("norm_fluorescence", "size"),
+        mean_norm_fluorescence=("norm_fluorescence", "mean"),
+        sd_norm_fluorescence=("norm_fluorescence", "std"),
+        mean_od600=("od600", "mean"),
+    )
+    .reset_index()
+)
+
+summary
+```
+
+This summary table is also tidy.
+
+Each row now represents one summarized condition rather than one raw replicate. That is still perfectly tidy, because the observational unit has changed. The important thing is that the rows and columns remain explicit.
+
+This distinction is worth remembering:
+
+- a **replicate-level tidy table** has one row per measurement
+- a **condition-level tidy summary** has one row per summarized condition
+
+Both are tidy. They simply describe different units of analysis.
+
+## Quantifying induction
+
+Once we have grouped summaries, we can compute simple biological metrics such as fold induction.
+
+```{python}
+baseline = summary[summary["inducer_mM"] == 0.0][
+    ["strain", "mean_norm_fluorescence"]
+].rename(columns={"mean_norm_fluorescence": "baseline_norm_fluorescence"})
+
+summary_with_baseline = summary.merge(baseline, on="strain")
+summary_with_baseline["fold_induction"] = (
+    summary_with_baseline["mean_norm_fluorescence"]
+    / summary_with_baseline["baseline_norm_fluorescence"]
+)
+
+summary_with_baseline
+```
+
+Now we have a compact summary that answers a real synthetic biology question: how strongly does each strain respond to inducer?
+
+## Missing values happen
+
+Real experiments are not perfectly complete. Wells fail, cultures contaminate, measurements are dropped, and metadata go missing.
+
+`pandas` uses special missing values such as `NaN` to represent absent entries.
+
+```{python}
+with_missing = experiment.copy()
+with_missing.loc[3, "od600"] = None
+with_missing.loc[8, "fluorescence"] = None
+
+with_missing
+```
+
+We can ask how many missing values appear in each column.
+
+```{python}
+with_missing.isna().sum()
+```
+
+Sometimes the correct action is to remove incomplete rows.
+
+```{python}
+complete_cases = with_missing.dropna(subset=["od600", "fluorescence"])
+complete_cases
+```
+
+Other times we may want to keep the rows but mark that some analysis cannot yet be performed.
+
+The important point is not to ignore missingness. Missing values are part of the data-generating process and often reflect something biologically or experimentally meaningful.
+
+## Reading tidy data from a CSV file
+
+In practice, we usually load data from files rather than typing them directly into Python.
+
+Here is a small CSV example using an in-memory text buffer.
+
+```{python}
+from io import StringIO
+
+csv_text = """strain,inducer_mM,time_h,replicate,od600,fluorescence
+WT,0.0,4,1,0.82,145
+WT,0.0,4,2,0.80,150
+Sensor,1.0,4,1,0.78,920
+Sensor,1.0,4,2,0.76,980
+"""
+
+loaded = pd.read_csv(StringIO(csv_text))
+loaded
+```
+
+On disk, the equivalent workflow would look like this:
+
+```{python}
+from pathlib import Path
+
+example_path = Path("data") / "induction_results.csv"
+example_path
+```
+
+If the file exists, we would read it with:
+
+```{python}
+# pd.read_csv(example_path)
+```
+
+In a real project, the most important thing is that the CSV itself should already be organized as a tidy table whenever possible.
+
+## Merging measurement tables with metadata
+
+Experiments often involve more than one table.
+
+For example, one table may contain measurements, while another contains construct metadata.
+
+```{python}
+metadata = pd.DataFrame(
+    {
+        "strain": ["WT", "Sensor", "Amplifier"],
+        "plasmid": ["pControl", "pSensor", "pAmp"],
+        "reporter": ["none", "GFP", "GFP"],
+        "host": ["E. coli", "E. coli", "E. coli"],
+    }
+)
+
+metadata
+```
+
+Because both tables have a `strain` column, we can merge them.
+
+```{python}
+annotated = experiment.merge(metadata, on="strain", how="left")
+annotated
+```
+
+This is one of the major reasons to preserve tidy structure. Joins become much easier when variables are explicit and consistently named.
+
+## Selecting one table shape for downstream work
+
+Once you begin analyzing tidy data, it is tempting to keep making presentation-friendly versions of the table. That is fine for slides or papers, but for computation it is better to keep a **canonical tidy table** and derive other forms when needed.
+
+For example, if you ever need a wide table for reporting, you can create it from the tidy version.
+
+```{python}
+wide_summary = summary.pivot(
+    index="strain",
+    columns="inducer_mM",
+    values="mean_norm_fluorescence",
+)
+
+wide_summary
+```
+
+That is a useful display, but it is not the format we want to keep as the primary analytical table.
+
+A good default workflow is:
+
+1. clean the raw data
+2. convert to tidy format
+3. do all analysis in tidy format
+4. create wide or presentation-specific views only at the end
+
+We will follow that pattern throughout the rest of this book.
+
+## Saving processed data
+
+After cleaning and summarizing a dataset, it is often helpful to save the result for later chapters, figures, or reports.
+
+```{python}
+output_dir = Path("results")
+output_dir.mkdir(exist_ok=True)
+
+output_path = output_dir / "induction_summary.csv"
+summary_with_baseline.to_csv(output_path, index=False)
+
+output_path
+```
+
+That small step turns an analysis from a one-off calculation into a reproducible workflow artifact.
+
+## A small end-to-end example
+
+Let us combine the main ideas of the chapter into a compact workflow.
+
+```{python}
+workflow_result = (
+    experiment
+    .assign(norm_fluorescence=lambda df: df["fluorescence"] / df["od600"])
+    .groupby(["strain", "inducer_mM"])
+    .agg(mean_norm_fluorescence=("norm_fluorescence", "mean"))
+    .reset_index()
+    .sort_values(["strain", "inducer_mM"])
+)
+
+workflow_result
+```
+
+This pipeline works cleanly because the underlying table is tidy.
+
+That is the theme to carry forward.
+
+As datasets become larger and models become more sophisticated, tidy organization continues to pay off.
+
+## Recap
+
+In this chapter, we learned how to:
+
+- represent biological experiments as `pandas` DataFrames
+- distinguish wide tables from tidy tables
+- reshape data into tidy format
+- inspect columns, dimensions, and data types
+- filter rows and select variables
+- create derived columns such as normalized fluorescence
+- summarize replicate-level data by condition
+- handle missing values explicitly
+- merge measurements with metadata
+- save processed outputs for reproducible analysis
+
+Most importantly, we established a convention for the rest of the book:
+
+**From here onward, tabular experimental data should be assumed to be in tidy format unless stated otherwise.**
+
+## Exercises
+
+1. Add a new column called `log10_norm_fluorescence` using base-10 logarithms. You may need the `math` module or `numpy`.
+
+2. Extend the experiment table by adding a second time point, such as `time_h = 8`, and compute condition summaries grouped by both time and inducer.
+
+3. Create a metadata table that includes a `promoter` column and merge it with the experiment table.
+
+4. Starting from a wide table with columns like `Sensor_0mM_rep1` and `Sensor_1mM_rep1`, convert it into a tidy table with separate columns for strain, inducer, and replicate.
+
+5. Save both the replicate-level tidy table and the condition-level summary table to separate CSV files in a `results/` directory.
