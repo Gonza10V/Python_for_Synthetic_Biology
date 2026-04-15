@@ -1,0 +1,18 @@
+# Sequences as Data
+
+## Draft focus
+
+Show how DNA, RNA, and protein sequences can be represented, transformed, and annotated in Python.
+
+## Starter example
+
+```{python}
+complement_map = str.maketrans("ATGC", "TACG")
+sequence = "ATGCCGTA"
+reverse_complement = sequence.translate(complement_map)[::-1]
+reverse_complement
+```
+
+## Draft note
+
+Later expand this chapter with Biopython and feature annotations.

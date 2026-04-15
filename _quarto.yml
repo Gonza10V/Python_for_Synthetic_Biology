@@ -1,0 +1,58 @@
+project:
+  type: book
+  output-dir: docs
+
+book:
+  title: "Python for Synthetic Biology"
+  author: "Gonzalo Vidal"
+  page-navigation: true
+  search: true
+  repo-url: https://github.com/Gonza10V/python-for-synthetic-biology
+  repo-actions: [edit, issue]
+  chapters:
+    - index.qmd
+    - preface.qmd
+    - roadmap.qmd
+    - part: "Part I - Foundations"
+      chapters:
+        - chapters/01-why-python-for-synbio.qmd
+        - chapters/02-python-basics-for-biologists.qmd
+        - chapters/03-jupyter-and-reproducibility.qmd
+    - part: "Part II - Biological Data in Python"
+      chapters:
+        - chapters/04-sequences-as-data.qmd
+        - chapters/05-tabular-experimental-data.qmd
+        - chapters/06-networks-circuits-and-graphs.qmd
+    - part: "Part III - Models, Standards, and Design Automation"
+      chapters:
+        - chapters/07-modeling-gene-expression.qmd
+        - chapters/08-design-build-test-learn.qmd
+        - chapters/09-sbol-and-tooling.qmd
+    - part: "Part IV - Case Studies from Real Lab Software"
+      chapters:
+        - chapters/10-rudgelab-case-studies.qmd
+        - chapters/11-myers-lab-case-studies.qmd
+        - chapters/12-personal-projects.qmd
+    - part: "Part V - The Future Lab"
+      chapters:
+        - chapters/13-draggon-lab-vision.qmd
+        - chapters/14-capstone-projects.qmd
+    - references.qmd
+
+bibliography: references.bib
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    toc-depth: 3
+    code-link: true
+
+execute:
+  echo: true
+  warning: false
+  message: false
+  freeze: auto
+  cache: true
+
+jupyter: python3

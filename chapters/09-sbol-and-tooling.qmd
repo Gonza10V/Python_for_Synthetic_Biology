@@ -1,0 +1,14 @@
+# SBOL and Tooling
+
+## Draft focus
+
+Explain why standards matter and how they support interoperability in synthetic biology software.
+
+## Draft note
+
+This chapter should eventually introduce:
+
+- SBOL concepts
+- design objects and metadata
+- interoperability between tools
+- educational examples of standard-aware workflows

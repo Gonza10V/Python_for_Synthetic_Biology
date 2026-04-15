@@ -1,0 +1,15 @@
+/* Minimal starter styles for a clean technical book */
+
+.quarto-title-block .quarto-title-banner {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+
+p code,
+li code {
+  font-size: 0.95em;
+}
+
+.callout.callout-style-default {
+  border-left-width: 4px;
+}

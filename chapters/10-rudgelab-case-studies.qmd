@@ -1,0 +1,21 @@
+# RudgeLab Case Studies
+
+## Draft focus
+
+Use selected tools as chapter anchors for different styles of synbio software.
+
+## Candidate tools
+
+- LOICA
+- PUDU
+- Flapjack
+- CellModeller
+
+## Draft note
+
+A good structure for each case study:
+
+1. What biological or workflow problem does the tool address?
+2. What computational abstraction does it introduce?
+3. What Python concept or software design lesson can readers learn from it?
+4. What lightweight educational example can be recreated in the book?

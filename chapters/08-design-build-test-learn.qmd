@@ -1,0 +1,16 @@
+# Design-Build-Test-Learn
+
+## Draft focus
+
+Describe DBTL as both an engineering workflow and a software architecture problem.
+
+## Starter example
+
+```{python}
+dbtl = ["design", "build", "test", "learn"]
+{step: i for i, step in enumerate(dbtl, start=1)}
+```
+
+## Draft note
+
+This chapter can later link to automation pipelines, metadata, and iteration tracking.

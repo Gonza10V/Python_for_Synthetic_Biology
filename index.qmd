@@ -1,0 +1,61 @@
+---
+title: "Python for Synthetic Biology"
+subtitle: "Executable workflows for biological engineering"
+---
+
+```{python}
+message = "Welcome to Python for Synthetic Biology"
+message
+```
+
+This book teaches Python through the workflows, abstractions, and software patterns that matter in synthetic biology.
+
+Instead of learning programming in the abstract and only later trying to apply it to biology, we will build intuition directly from synthetic biology problems:
+
+- representing DNA sequences and annotations
+- working with experimental measurements
+- modeling gene expression and regulatory circuits
+- structuring design-build-test-learn workflows
+- learning from real open-source tools developed in research labs
+
+## Why this book exists
+
+Synthetic biology increasingly depends on software. We design parts, assemble circuits, manage metadata, analyze experiments, run simulations, exchange models, and automate lab workflows through code. Yet many trainees still learn these pieces in fragments.
+
+This book is an attempt to provide a coherent path.
+
+It is designed for readers who want to:
+
+- learn Python with examples that feel biologically meaningful
+- understand how biological systems become computational objects
+- move from scripts to software thinking
+- connect teaching examples with real tools and research directions
+
+## How to read this book
+
+You can read the book in order, but it is also designed to support selective reading.
+
+- **Part I** builds the programming foundation.
+- **Part II** introduces biological data as Python objects.
+- **Part III** moves into models, standards, and design automation.
+- **Part IV** uses open-source lab tools as case studies.
+- **Part V** looks forward to the design of future synthetic biology labs.
+
+## A working philosophy
+
+Every chapter should answer three questions:
+
+1. What is the biological problem?
+2. How should we think about it computationally?
+3. What does the Python actually look like?
+
+## First tiny example
+
+```{python}
+sequence = "ATGCGTACGTTAG"
+length = len(sequence)
+gc_fraction = (sequence.count("G") + sequence.count("C")) / length
+{"sequence": sequence, "length": length, "gc_fraction": round(gc_fraction, 3)}
+```
+
+This is intentionally simple. But already we are treating biology as structured, computable information. That shift in perspective will appear again and again throughout the book.

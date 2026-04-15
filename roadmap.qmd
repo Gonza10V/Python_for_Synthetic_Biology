@@ -1,0 +1,41 @@
+# Roadmap
+
+This page gives a draft map of the book.
+
+## Part I - Foundations
+
+- Why Python for synthetic biology?
+- Python basics for biologists
+- Jupyter, reproducibility, and computational practice
+
+## Part II - Biological Data in Python
+
+- Sequences as strings, records, and objects
+- Experimental data as tidy tables
+- Circuits and interactions as graphs
+
+## Part III - Models, Standards, and Design Automation
+
+- Modeling gene expression and regulation
+- Design-build-test-learn workflows
+- SBOL and software interoperability
+
+## Part IV - Case Studies from Real Lab Software
+
+- RudgeLab tools and architecture lessons
+- MyersResearchGroup tools and standards-driven workflows
+- Personal projects as bridges between research and product thinking
+
+## Part V - The Future Lab
+
+- The DRAGGON Lab vision
+- Capstones and tool ideas that can grow with the book
+
+## Companion tools to develop alongside the book
+
+Possible repositories or modules to create later:
+
+- `synbio_sequences`: teaching utilities for sequence manipulation
+- `synbio_dbtl`: minimal DBTL workflow objects
+- `synbio_models`: simple dynamical models and plotting helpers
+- `synbio_io`: lightweight import and export helpers for educational examples

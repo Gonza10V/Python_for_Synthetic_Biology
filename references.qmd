@@ -1,0 +1,10 @@
+# References
+
+A bibliography file can be added later to support formal citations, software references, and recommended reading.
+
+For now, this chapter can collect:
+
+- software repositories
+- papers
+- standards documentation
+- textbooks and open educational resources

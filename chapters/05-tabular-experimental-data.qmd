@@ -1,0 +1,21 @@
+# Tabular Experimental Data
+
+## Draft focus
+
+Introduce `pandas` through fluorescence, growth, induction, and metadata tables.
+
+## Starter example
+
+```{python}
+import pandas as pd
+
+df = pd.DataFrame(
+    {
+        "sample": ["A", "B", "C"],
+        "fluorescence": [1200, 3400, 2900],
+        "od600": [0.4, 0.8, 0.7],
+    }
+)
+
+df.assign(norm_fluorescence=df["fluorescence"] / df["od600"])
+```

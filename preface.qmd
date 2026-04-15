@@ -1,0 +1,35 @@
+# Preface
+
+This project sits at the intersection of synthetic biology, computational biology, software engineering, and scientific education.
+
+The book takes inspiration from technical books that treat code as a first-class teaching medium while keeping the prose compact and purposeful. It also takes inspiration from open educational resources that pair conceptual models with executable examples.
+
+## What makes this book different
+
+This is not just a Python book with a few biology examples added on top.
+
+It is a synbio-native programming book.
+
+The core premise is that synthetic biology already has its own computational objects, recurring workflows, and software abstractions:
+
+- sequences
+- features and annotations
+- constructs and designs
+- measurements and metadata
+- regulatory networks
+- simulation models
+- standard representations
+- automated DBTL pipelines
+
+Python becomes useful here not only because it is popular, but because it is expressive enough to make these abstractions visible.
+
+## What this book can grow into
+
+Over time, the book can evolve into a broader educational and software platform:
+
+- a technical book
+- a workshop resource
+- a companion set of teaching libraries
+- a bridge between introductory training and research software
+
+That is one reason the repository is structured so that code can mature alongside the text.

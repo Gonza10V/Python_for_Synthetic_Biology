@@ -1,0 +1,16 @@
+# Myers Lab Case Studies
+
+## Draft focus
+
+Use current lab tools to show standards-driven, integrative synbio software.
+
+## Candidate tools
+
+- SynBioSuite
+- SeqImprove
+- BuildCompiler
+- PUDU as a bridge from prior work
+
+## Draft note
+
+This chapter can emphasize software ecosystems, interfaces, and how toolchains evolve inside research groups.
