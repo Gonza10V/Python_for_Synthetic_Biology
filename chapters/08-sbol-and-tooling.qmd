@@ -639,7 +639,7 @@ roundtrip_genbank = artifacts / "roundtrip.gb"
 records = convert_to_genbank(
     genbank_doc,
     str(roundtrip_genbank),
-    allow_genbank_online=False,
+    allow_genbank_online=True,
 )
 
 {
