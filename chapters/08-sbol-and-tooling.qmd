@@ -621,7 +621,7 @@ SeqIO.write(record, genbank_path, "genbank")
 genbank_doc = convert_from_genbank(
     str(genbank_path),
     "https://example.org/genbank-demo",
-    allow_genbank_online=False,
+    allow_genbank_online=True,
 )
 
 pd.DataFrame(
