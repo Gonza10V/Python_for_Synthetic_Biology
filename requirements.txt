@@ -9,3 +9,4 @@ sbol3
 sbol-utilities
 loica
 pyflapjack
+pyparsing==3.3.0
