@@ -1,0 +1,716 @@
+# SBOL and Tooling
+
+Synthetic biology is not only about sequences.
+
+It is also about **design exchange**.
+
+A FASTA file can tell us what the bases are.
+A GenBank record can tell us more, including annotations and sequence features.
+But engineered biological systems are usually more than a sequence record.
+
+We often need to represent:
+
+- what the parts are
+- how they are composed
+- what roles they play
+- what interactions they participate in
+- what constraints or assumptions define the design
+- how a design moves between tools in the design-build-test-learn cycle
+
+That is where **SBOL**, the **Synthetic Biology Open Language**, becomes important.
+
+For synthetic biology, SBOL should be the default exchange format whenever we care about both **structure** and **function**, not just raw sequence. FASTA and GenBank are still useful, but they are best treated as sequence-oriented formats, not as the canonical representation of an engineered design.
+
+In this chapter, we will do four things:
+
+- understand why SBOL matters
+- learn the core object model of **pySBOL3**
+- use **SBOL-utilities** to reduce boilerplate and bridge older sequence formats into SBOL
+- visualize designs with **VisBOL** and **DNAplotlib**
+
+By the end, you should see SBOL not as an abstract standard, but as a practical data structure for Python-based synthetic biology and a natural foundation for standardized design visualization.
+
+## Why not stop at FASTA or GenBank?
+
+FASTA is extremely simple.
+
+That simplicity is also its limitation.
+
+A FASTA record usually gives us an identifier and a sequence. That is enough for alignment, primer design, BLAST searches, and many sequence-processing tasks. It is not enough to represent a complete design intent.
+
+GenBank is richer.
+
+A GenBank file can include annotated features such as promoters, coding sequences, and terminators. That makes it much more informative than FASTA for sequence-centric work. But GenBank is still centered on the idea of a sequence record with annotations layered on top.
+
+Synthetic biology often needs more than that.
+
+We may want to represent that a promoter regulates a coding sequence, that a protein inhibits another component, that a construct is part of a larger system, or that a design is intended to move into another software tool for simulation, build planning, repository upload, or metadata capture.
+
+SBOL was developed for exactly this problem.
+
+SBOL is meant to standardize how designs are represented so that tools can exchange information without inventing a new private format for each project.
+
+A useful practical rule is this:
+
+- use **FASTA** when you only need sequence strings
+- use **GenBank** when you need sequence plus familiar annotations
+- use **SBOL** when you need a standardized representation of engineered biological design, especially when **structure, function, composition, and interoperability** all matter
+
+## SBOL as a design language
+
+One helpful way to think about SBOL is that it gives us a common language for design objects.
+
+Instead of passing around only strings, we can pass around structured objects such as:
+
+- a DNA component
+- a protein component
+- a promoter role
+- a transcriptional unit as an engineered region
+- interactions such as repression or production
+- documents that collect many related design objects together
+
+This matters because software becomes much easier to connect when tools agree on the meaning of those objects.
+
+That is why SBOL shows up naturally in standards-driven workflows, repositories such as SynBioHub, and design automation tools.
+
+## The tooling layers we will use
+
+In this chapter we will use two related packages.
+
+### `pySBOL3`
+
+This is the core Python interface to SBOL version 3.
+
+It gives us the low-level object model directly:
+
+- `Document`
+- `Component`
+- `Sequence`
+- `SubComponent`
+- `Interaction`
+- `Participation`
+- `Constraint`
+
+When you want precise control, `pySBOL3` is the main tool.
+
+### `SBOL-utilities`
+
+This package sits one layer higher.
+
+It provides helper functions for common operations, including:
+
+- creating standard biological parts
+- assembling simple engineered regions
+- converting between formats such as FASTA, GenBank, and SBOL
+- supporting common synthetic biology workflows
+
+In practice, many projects use both layers together.
+
+Use `pySBOL3` when you want explicit control over the data model.
+Use `SBOL-utilities` when you want convenience and interoperability helpers.
+
+### VisBOL
+
+VisBOL is useful when your source of truth is already an SBOL design and you want to inspect or communicate that design visually using standardized glyphs.
+
+It is especially good for:
+
+- quickly checking whether a design looks structurally right
+- rendering SBOL-native diagrams without manually defining shapes
+- exporting clean figures for notes, talks, or manuscripts
+
+### DNAplotlib
+
+DNAplotlib is useful when your source of truth is a Python analysis workflow and you want fine-grained control over how the diagram is drawn.
+
+It is especially good for:
+
+- building publication-style figures programmatically
+- overlaying or aligning design diagrams with analysis outputs
+- customizing colors, labels, part geometry, and regulation arcs
+
+A good working habit is to think of these tools as complementary rather than competing.
+
+- **SBOL + VisBOL** is a strong path for standardized design exchange and standardized visualization
+- **Python objects + DNAplotlib** is a strong path for flexible figure generation inside analysis notebooks and scripts
+
+## Installing the packages
+
+A minimal installation looks like this:
+
+```{bash}
+pip install sbol3 sbol-utilities biopython
+```
+
+If you also want to reproduce the DNAplotlib examples later in the chapter, install it as well:
+
+```{bash}
+pip install dnaplotlib
+```
+
+VisBOL is typically used as a separate visualization tool rather than as a Python package inside the same notebook workflow, so we will treat it as an external viewer for SBOL files.
+
+## A first SBOL document with `pySBOL3`
+
+We will start with a constitutive GFP transcriptional unit.
+
+The goal is not biological realism in every nucleotide.
+The goal is to understand the data model.
+
+We will create:
+
+- a promoter
+- an RBS
+- a coding sequence
+- a terminator
+- an engineered region that contains them in order
+
+```{python}
+from pathlib import Path
+
+import pandas as pd
+import sbol3
+
+artifacts = Path("outputs/ch08")
+artifacts.mkdir(parents=True, exist_ok=True)
+
+sbol3.set_namespace("https://example.org/python-for-synthetic-biology")
+
+doc = sbol3.Document()
+
+
+def make_dna_component(doc, name, role, seq_text):
+    component = sbol3.Component(name, sbol3.SBO_DNA, roles=[role])
+    sequence = sbol3.Sequence(
+        f"{name}_seq",
+        elements=seq_text,
+        encoding=sbol3.IUPAC_DNA_ENCODING,
+    )
+    component.sequences = [sequence]
+    doc.add(sequence)
+    doc.add(component)
+    return component
+
+
+promoter = make_dna_component(
+    doc,
+    "pConst",
+    sbol3.SO_PROMOTER,
+    "ttgacagctagctcagtcctaggtataatgctagc",
+)
+rbs = make_dna_component(doc, "BCD2", sbol3.SO_RBS, "aaaggagg")
+gfp = make_dna_component(doc, "GFP", sbol3.SO_CDS, "atggtgagcaagggcgaggag")
+terminator = make_dna_component(
+    doc,
+    "T1",
+    sbol3.SO_TERMINATOR,
+    "tttttattgctagttattgctagc",
+)
+
+tu = sbol3.Component(
+    "TU_constitutive_gfp",
+    sbol3.SBO_DNA,
+    roles=[sbol3.SO_ENGINEERED_REGION],
+)
+
+for part in [promoter, rbs, gfp, terminator]:
+    tu.features.append(sbol3.SubComponent(part))
+
+for left, right in zip(tu.features[:-1], tu.features[1:]):
+    tu.constraints.append(sbol3.Constraint(sbol3.SBOL_PRECEDES, left, right))
+
+doc.add(tu)
+
+manual_path = artifacts / "manual_tu.nt"
+doc.write(manual_path, sbol3.SORTED_NTRIPLES)
+
+component_inventory = pd.DataFrame(
+    {
+        "display_id": [obj.display_id for obj in [promoter, rbs, gfp, terminator, tu]],
+        "type": ["DNA", "DNA", "DNA", "DNA", "DNA region"],
+        "role": [
+            "promoter",
+            "RBS",
+            "CDS",
+            "terminator",
+            "engineered region",
+        ],
+    }
+)
+
+component_inventory
+```
+
+One pattern emphasized in introductory SBOL tutorials is that a `Document` is not a black box.
+You should get used to inspecting its contents early and often.
+
+```{python}
+top_level_inventory = pd.DataFrame(
+    {
+        "display_id": [getattr(obj, "display_id", None) for obj in doc.objects],
+        "python_class": [type(obj).__name__ for obj in doc.objects],
+        "identity": [obj.identity for obj in doc.objects],
+    }
+)
+
+top_level_inventory
+```
+
+That inspection step is extremely useful when you are learning the model or debugging a larger document exported from another tool.
+
+That table is a **tidy inventory** of the main design objects: one row per object, one column per variable.
+
+The important point is not the exact nucleotide sequence.
+It is the fact that the design is now represented by structured SBOL objects instead of a single anonymous string.
+
+## What just happened?
+
+Several SBOL ideas appeared in a compact example.
+
+The coding style above is close to the pattern used in many introductory `pySBOL3` tutorials:
+
+1. set a namespace
+2. create a `Document`
+3. build top-level objects like `Component` and `Sequence`
+4. connect them through features, references, and constraints
+5. inspect the resulting document before writing it to disk
+
+That sequence of steps is worth internalizing because it scales from toy examples to larger design libraries.
+
+### `Document`
+
+A `Document` is the container for SBOL objects.
+
+It is the thing you read from disk, write to disk, and pass between tools.
+
+### `Component`
+
+A `Component` represents a biological design object.
+
+Here, our promoter, RBS, CDS, terminator, and complete transcriptional unit are all components.
+
+### `Sequence`
+
+A `Sequence` stores the actual sequence text.
+
+This matters conceptually.
+The sequence is not the same thing as the design object.
+A component may refer to a sequence, but the component also carries type and role information.
+
+### `SubComponent`
+
+A `SubComponent` says that one component occurs inside another.
+
+That is how the transcriptional unit contains the promoter, RBS, CDS, and terminator.
+
+### `Constraint`
+
+A `Constraint` lets us say that one part precedes another.
+
+That is how we capture order in the engineered region.
+
+This is already a major step beyond FASTA.
+We are not only storing bases. We are storing a design structure.
+
+## Representing function, not only sequence
+
+SBOL is especially valuable when we go beyond sequence layout and start representing function.
+
+Here is a minimal example of a sensor-like design where:
+
+- a protein `LacI` is represented explicitly
+- a promoter and coding region are placed inside a system
+- interactions are added to state repression and genetic production
+
+This is not yet a full mechanistic model.
+It is a structured functional description.
+
+```{python}
+laci = sbol3.Component("LacI", sbol3.SBO_PROTEIN)
+doc.add(laci)
+
+sensor = sbol3.Component("lac_sensor", sbol3.SBO_FUNCTIONAL_ENTITY)
+
+sensor_promoter = sbol3.SubComponent(promoter)
+sensor_output = sbol3.SubComponent(gfp)
+
+sensor.features.extend([sensor_promoter, sensor_output])
+sensor.constraints.append(sbol3.Constraint(sbol3.SBOL_PRECEDES, sensor_promoter, sensor_output))
+
+repression = sbol3.Interaction(
+    sbol3.SBO_INHIBITION,
+    participations=[
+        sbol3.Participation([sbol3.SBO_INHIBITOR], laci),
+        sbol3.Participation([sbol3.SBO_INHIBITED], sensor_promoter),
+    ],
+)
+
+production = sbol3.Interaction(
+    sbol3.SBO_GENETIC_PRODUCTION,
+    participations=[
+        sbol3.Participation([sbol3.SBO_TEMPLATE], sensor_output),
+        sbol3.Participation([sbol3.SBO_PRODUCT], laci),
+    ],
+)
+
+sensor.interactions.extend([repression, production])
+doc.add(sensor)
+
+interaction_table = pd.DataFrame(
+    {
+        "interaction_type": [i.types[0].split(":")[-1] if ":" in i.types[0] else i.types[0] for i in sensor.interactions],
+        "n_participants": [len(i.participations) for i in sensor.interactions],
+    }
+)
+
+interaction_table
+```
+
+Now we have crossed the line from **annotated sequence** into **design semantics**.
+
+That is the key educational leap of SBOL.
+
+You are no longer asking only, “what is this sequence?”
+You are also asking, “what role does this object play?” and “how does it relate to other objects in the design?”
+
+## Writing the design to disk
+
+An SBOL document can be serialized to disk in RDF-based formats.
+
+```{python}
+sensor_path = artifacts / "sensor_design.nt"
+doc.write(sensor_path, sbol3.SORTED_NTRIPLES)
+
+{
+    "file": str(sensor_path),
+    "exists": sensor_path.exists(),
+    "n_top_level_objects": len(list(doc.objects)),
+}
+```
+
+The exact serialization format is less important than the principle.
+
+Once a design is encoded as SBOL, it can be:
+
+- stored in a repository
+- exchanged across tools
+- inspected programmatically
+- enriched with more structure or metadata later
+
+## Visualizing the design with VisBOL
+
+Once a design exists as an SBOL document, the simplest visualization workflow is often to open that file in a tool that already understands SBOL semantics.
+
+That is the role of VisBOL.
+
+A practical workflow looks like this:
+
+1. build or export an SBOL document from Python
+2. write it to disk in an SBOL serialization format
+3. load that file into VisBOL
+4. inspect whether the structure, orientation, and composition match your intent
+5. export a figure when you want a quick standards-oriented diagram
+
+In other words, VisBOL is best thought of as a **viewer and renderer for SBOL-native designs**.
+
+If the design file is already the source of truth, this is often the fastest path from model to figure.
+
+```{python}
+visbol_ready_path = artifacts / "visbol_ready_design.nt"
+doc.write(visbol_ready_path, sbol3.SORTED_NTRIPLES)
+
+{
+    "file_for_visbol": str(visbol_ready_path),
+    "exists": visbol_ready_path.exists(),
+}
+```
+
+This chunk is intentionally simple.
+
+The key idea is that VisBOL does not require us to redraw the design by hand.
+It consumes the standardized SBOL representation directly.
+
+## Programmable visualization with DNAplotlib
+
+Sometimes standardized viewing is not enough.
+
+You may want to:
+
+- match a figure style used in a paper
+- control colors and labels precisely
+- line up a design diagram with experimental plots
+- render many design variants inside the same Python workflow
+
+That is where DNAplotlib becomes useful.
+
+Where VisBOL starts from an SBOL file, DNAplotlib usually starts from a Python description of the design to be drawn.
+The common pattern is to define a list of part dictionaries and then render them with a `DNARenderer`.
+
+The example below is marked as not executed because DNAplotlib is an optional dependency and may not be installed in every environment.
+The important thing is to see the workflow.
+
+```{python}
+#| eval: false
+import matplotlib.pyplot as plt
+import dnaplotlib as dpl
+
+design = [
+    {"type": "Promoter", "name": "pTet", "fwd": True, "opts": {"label": "pTet"}},
+    {"type": "RBS", "name": "BCD2", "fwd": True},
+    {"type": "CDS", "name": "GFP", "fwd": True, "opts": {"label": "GFP"}},
+    {"type": "Terminator", "name": "T1", "fwd": True},
+]
+
+regulations = [
+    {"type": "Repression", "from_part": 2, "to_part": 0, "opts": {"label": "LacI"}},
+]
+
+dr = dpl.DNARenderer()
+part_renderers = dr.SBOL_part_renderers()
+reg_renderers = dr.std_reg_renderers()
+
+fig, ax = plt.subplots(figsize=(10, 2))
+start, end = dr.renderDNA(
+    ax,
+    design,
+    part_renderers,
+    regs=regulations,
+    reg_renderers=reg_renderers,
+)
+
+ax.set_xlim([start - 10, end + 10])
+ax.set_ylim([-25, 25])
+ax.set_aspect("equal")
+ax.axis("off")
+fig.tight_layout()
+```
+
+This representation is more manual than VisBOL, but it is also more flexible.
+
+You can think of the difference like this:
+
+- **VisBOL** is excellent when you want a standards-aware rendering of the SBOL design itself
+- **DNAplotlib** is excellent when you want a programmable publication figure inside a Python workflow
+
+One very effective pattern is to keep SBOL as the canonical design representation, then derive a smaller plotting-oriented representation from it for custom figures.
+
+## Using `SBOL-utilities` to reduce boilerplate
+
+Writing `pySBOL3` objects directly is powerful, but it can feel verbose.
+
+That is where `SBOL-utilities` helps.
+
+The package provides helper constructors for common biological parts and common workflows.
+
+Here we will rebuild a transcriptional unit using helper functions rather than writing each piece by hand.
+
+```{python}
+from sbol_utilities.component import promoter as util_promoter
+from sbol_utilities.component import rbs as util_rbs
+from sbol_utilities.component import cds as util_cds
+from sbol_utilities.component import terminator as util_terminator
+from sbol_utilities.component import engineered_region
+
+helper_doc = sbol3.Document()
+
+helper_parts = []
+for factory, name, seq in [
+    (util_promoter, "pTet", "ttgacaattaatcatcggctcgtataatgtgtgga"),
+    (util_rbs, "BCD2_helper", "aaaggagg"),
+    (util_cds, "mCherry", "atggtgagcaagggcgaggag"),
+    (
+        util_terminator,
+        "B0015",
+        "ccgctgagcaataactagcataaccccttggggcctctaaacgggtcttgaggggttttttg",
+    ),
+]:
+    component, sequence = factory(name, seq)
+    helper_doc.add(component)
+    helper_doc.add(sequence)
+    helper_parts.append(component)
+
+helper_tu = engineered_region("TU_mCherry", helper_parts)
+helper_doc.add(helper_tu)
+
+helper_path = artifacts / "helper_tu.nt"
+helper_doc.write(helper_path, sbol3.SORTED_NTRIPLES)
+
+pd.DataFrame(
+    {
+        "quantity": [len(helper_parts), len(helper_tu.features), len(helper_tu.constraints)],
+    },
+    index=["input parts", "features in engineered region", "ordering constraints"],
+)
+```
+
+This example shows a pattern you will probably use often in real work.
+
+- use `pySBOL3` when you need direct control
+- use `SBOL-utilities` when you want a more ergonomic layer for common tasks
+
+The two are complementary.
+
+## Converting older sequence formats into SBOL
+
+A realistic lab does not begin from a perfect SBOL-native world.
+
+You may receive:
+
+- a FASTA file from a collaborator
+- a GenBank record from a plasmid repository
+- a directory full of mixed sequence files from older projects
+
+One practical reason to use `SBOL-utilities` is that it helps bridge those formats into SBOL.
+
+### FASTA to SBOL
+
+```{python}
+from sbol_utilities.conversion import convert_from_fasta, convert_to_fasta
+
+fasta_path = artifacts / "toy.fasta"
+fasta_path.write_text(">gfp\nATGGTGAGCAAGGGCGAGGAG\n")
+
+fasta_doc = convert_from_fasta(str(fasta_path), "https://example.org/fasta-demo")
+
+fasta_summary = pd.DataFrame(
+    {
+        "object_type": [type(obj).__name__ for obj in fasta_doc.objects],
+        "identity": [obj.identity for obj in fasta_doc.objects],
+    }
+)
+
+fasta_summary
+```
+
+That conversion gives us an SBOL document that tools can work with directly.
+
+We can also export back out again when needed.
+
+```{python}
+roundtrip_fasta = artifacts / "roundtrip.fasta"
+convert_to_fasta(fasta_doc, str(roundtrip_fasta))
+
+roundtrip_fasta.read_text()
+```
+
+### GenBank to SBOL
+
+For a GenBank example, we will first create a tiny GenBank record with Biopython and then convert it.
+
+```{python}
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqFeature import FeatureLocation, SeqFeature
+from Bio.SeqRecord import SeqRecord
+from sbol_utilities.conversion import convert_from_genbank, convert_to_genbank
+
+record = SeqRecord(
+    Seq("ATGGTGAGCAAGGGCGAGGAGTAA"),
+    id="toy_plasmid",
+    name="toy_plasmid",
+    description="toy plasmid",
+)
+record.annotations["molecule_type"] = "DNA"
+record.features = [
+    SeqFeature(FeatureLocation(0, 24), type="CDS", qualifiers={"label": ["GFP"]})
+]
+
+genbank_path = artifacts / "toy.gb"
+SeqIO.write(record, genbank_path, "genbank")
+
+genbank_doc = convert_from_genbank(
+    str(genbank_path),
+    "https://example.org/genbank-demo",
+    allow_genbank_online=False,
+)
+
+pd.DataFrame(
+    {
+        "object_type": [type(obj).__name__ for obj in genbank_doc.objects],
+        "identity": [obj.identity for obj in genbank_doc.objects],
+    }
+)
+```
+
+And we can export back to GenBank when needed.
+
+```{python}
+roundtrip_genbank = artifacts / "roundtrip.gb"
+records = convert_to_genbank(
+    genbank_doc,
+    str(roundtrip_genbank),
+    allow_genbank_online=False,
+)
+
+{
+    "roundtrip_file": str(roundtrip_genbank),
+    "n_records": len(records),
+    "first_record_id": records[0].id,
+}
+```
+
+This is a good example of how to think about the formats together.
+
+FASTA and GenBank do not need to disappear.
+
+But if your workflow is moving toward standardization, automation, and interoperability, they should usually become **boundary formats**, while SBOL becomes the **canonical internal representation** of the design.
+
+## A practical mindset for using SBOL
+
+At first, SBOL can feel like extra work.
+
+Why not just keep using strings and GenBank files?
+
+The answer is that standards pay off when projects become larger, more collaborative, or more automated.
+
+SBOL becomes especially valuable when you want to:
+
+- move designs between tools without hand-written adapters
+- keep structure and function together in one representation
+- connect sequence design to metadata, repositories, simulation, or build planning
+- represent systems, not only isolated records
+- write reusable code that operates on standardized design objects
+
+If you are working alone on one plasmid, FASTA or GenBank might feel enough.
+
+If you want reproducible, standards-driven synthetic biology software, SBOL is the better long-term choice.
+
+## Recommended workflow
+
+A practical educational workflow looks like this:
+
+1. start with simple sequence manipulation when needed
+2. convert important designs into SBOL early
+3. use `pySBOL3` for explicit modeling of components and interactions
+4. use `SBOL-utilities` to reduce repetitive code and bridge formats
+5. treat FASTA and GenBank as import/export formats, not as the richest source of design truth
+
+This mirrors a broader pattern in computational biology.
+
+Raw strings are convenient.
+Structured objects scale better.
+
+## Exercises
+
+1. Create an SBOL document for a transcriptional unit containing a promoter, RBS, coding sequence, and terminator for a reporter of your choice.
+2. Add a protein regulator and encode a repression interaction in SBOL.
+3. Convert a small FASTA file into SBOL and inspect the generated top-level objects.
+4. Convert a simple GenBank record into SBOL and then export it back to GenBank.
+5. Extend one of the examples so that the resulting SBOL document contains two transcriptional units rather than one.
+
+## Recap
+
+In this chapter, we moved from sequence-centric thinking to design-centric thinking.
+
+The main ideas are:
+
+- SBOL is the right format when we need standardized representations of both structure and function
+- `pySBOL3` exposes the SBOL 3 data model directly in Python
+- `SBOL-utilities` makes common tasks easier and helps bridge older sequence formats into SBOL
+- VisBOL gives us a standards-aware way to inspect and communicate SBOL-native designs
+- DNAplotlib gives us a programmable way to build highly customized design figures inside Python workflows
+- FASTA and GenBank remain useful, but SBOL is the better canonical format for interoperable synthetic biology tooling
+
+This chapter also changes the mental model we will use in the rest of the book.
+
+When a design matters as an engineered object rather than just a nucleotide string, we should now think first in terms of **SBOL documents, components, features, interactions, and standardized exchange**.

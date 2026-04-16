@@ -1,0 +1,11 @@
+biopython
+jupyter
+matplotlib
+networkx
+numpy
+pandas
+sbol3
+sbol-utilities
+loica
+pyflapjack
+

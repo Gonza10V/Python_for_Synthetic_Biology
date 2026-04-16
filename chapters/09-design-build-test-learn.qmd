@@ -1,0 +1,695 @@
+# Design-Build-Test-Learn
+
+Synthetic biology is often introduced as a cycle:
+
+**design -> build -> test -> learn**
+
+That is true.
+
+But for Python users, DBTL is also something more specific.
+
+It is a **data pipeline**.
+Each stage consumes structured information, transforms it, and produces new structured information for the next stage.
+If the stages do not agree on representations, metadata, and interfaces, the loop breaks.
+If they do agree, then the loop can become reproducible, automatable, and eventually scalable.
+
+This chapter uses three tools from your thesis work as a concrete case study in closing the loop:
+
+- **LOICA** for design, simulation, and characterization
+- **PUDU** for build planning and liquid-handling automation
+- **Flapjack** for experimental data management, querying, visualization, and analysis
+
+Together they illustrate an important lesson for synthetic biology software:
+
+> the hard part is not only making a useful tool for one stage, but making the outputs of one stage become usable inputs for the next.
+
+## Why DBTL matters computationally
+
+In many labs, DBTL is still partly manual.
+A researcher sketches a design, builds DNA constructs, runs a plate-reader experiment, exports a spreadsheet, makes a plot, and then updates the next design by hand.
+
+That workflow can work at small scale.
+But it becomes fragile as soon as we want to:
+
+- compare many candidate designs
+- track metadata consistently
+- reuse past experimental results
+- automate liquid handling
+- parameterize models from data
+- rerun the same analysis months later
+
+From a Python perspective, DBTL is the problem of building **composable software objects and file formats** for biological engineering.
+
+That is why the previous chapter on SBOL matters so much here.
+DBTL becomes much easier to automate when designs, build plans, and metadata are represented in machine-readable ways rather than buried in screenshots, notebooks, or informal spreadsheets.
+
+## One DBTL cycle as a data transformation pipeline
+
+One useful way to think about the cycle is to focus on the main artifact produced at each stage.
+
+```{python}
+import pandas as pd
+
+pipeline = pd.DataFrame(
+    {
+        "stage": ["design", "build", "test", "learn"],
+        "main_artifact": [
+            "design objects and models",
+            "assembly plan and protocol",
+            "measurements plus metadata",
+            "parameters, summaries, and ranked designs",
+        ],
+        "python_question": [
+            "How do I represent a genetic network?",
+            "How do I turn a design into executable instructions?",
+            "How do I query and analyze assay data?",
+            "How do I feed the results back into the next design?",
+        ],
+    }
+)
+
+pipeline
+```
+
+This is simple, but it captures the core software idea of the chapter.
+Each stage is not just an activity.
+It is a transformation from one data structure into another.
+
+## A thesis-derived software stack for closing the loop
+
+Your thesis frames this nicely.
+The work focuses on creating DBTL workflows for engineering synthetic genetic network dynamics, and emphasizes that many existing tools do not cover the whole cycle or connect cleanly across stages. The resulting framework is modular, standards-aware, and intended to support simulated, manual, and automated workflows.
+
+The three tools in this chapter fit into the loop like this:
+
+### LOICA: design and model-driven iteration
+
+LOICA is a Python package for designing, modeling, and characterizing genetic networks.
+The package README describes it as a tool for designing, modeling, and characterizing genetic networks, with support for synthetic data generation, communication with Flapjack, and SBOL I/O.
+
+In the thesis, LOICA is used as the design-stage engine that can generate network models, run simulations, export standards-based representations, and later absorb characterization results back into the design loop.
+
+### PUDU: build planning and liquid-handling automation
+
+PUDU is a Python package for liquid-handling robot control in synthetic biology workflows. Its README presents it as a way to make robot programming small and simple, and recommends a workflow based on developing and simulating protocols locally before running them on an OT-2.
+
+In the thesis, PUDU sits at the build stage and turns standardized build information into executable assembly, transformation, and plate-setup workflows, including metadata capture.
+
+### Flapjack: test and learn
+
+Flapjack is the data-management and analysis side of the loop.
+Its paper describes it as a system for organizing, querying, plotting, and analyzing characterization data, with a REST API and Python package, and with measurements linked to design metadata through SBOL.
+
+In the thesis, Flapjack closes the loop by storing simulated or experimental measurements, supporting visualization and analysis, and enabling characterization results to feed back into LOICA.
+
+## Three levels of workflow closure
+
+A nice feature of the thesis work is that it does not treat DBTL as all-or-nothing.
+Instead, it shows three progressively more connected workflows:
+
+1. a **simulated** DBTL workflow
+2. a workflow with **manual build** but software-assisted design and learn
+3. a workflow with **automated build** using liquid handling
+
+That progression is pedagogically useful.
+It shows students that they do not need a robot to understand DBTL.
+They can start with simulation, then add richer metadata and experimental data, and then later add automation.
+
+```{python}
+workflow_levels = pd.DataFrame(
+    {
+        "workflow": [
+            "simulated DBTL",
+            "manual build workflow",
+            "automated build workflow",
+        ],
+        "design": ["LOICA", "LOICA", "LOICA"],
+        "build": ["PUDU simulated", "manual execution + PUDU planning", "PUDU + OT-2"],
+        "test_learn": ["Flapjack on simulated data", "Flapjack on plate-reader data", "Flapjack on automated experimental data"],
+    }
+)
+
+workflow_levels
+```
+
+## The software architecture of a closed loop
+
+A compact way to summarize the architecture is this:
+
+```{python}
+workflow_graph = {
+    "LOICA": ["SBOL", "Flapjack"],
+    "SBOL": ["sbol-utilities", "PUDU"],
+    "PUDU": ["metadata", "lab automation", "Flapjack"],
+    "Flapjack": ["analysis", "characterization", "LOICA"],
+}
+workflow_graph
+```
+
+This is of course a simplification.
+But it shows an important design principle:
+
+- **LOICA** produces structured designs and models
+- **SBOL and SBOL-utilities** provide the standards bridge
+- **PUDU** turns build plans into executable build actions
+- **Flapjack** stores and analyzes measurements
+- the outputs from **Flapjack** inform the next round of **LOICA** models
+
+That is what people mean when they say a DBTL loop is *closed*.
+
+## Using LOICA at the design stage
+
+LOICA is a good teaching example because it treats a genetic network as a composition of Python objects.
+That makes it useful not only biologically but also computationally.
+It helps readers see that a design tool is really an **object model** plus a **simulation interface** plus a **data interface**.
+
+The official LOICA notebooks show a pattern like this:
+
+- connect to Flapjack
+- create or retrieve data objects such as study, vector, and signal
+- instantiate a `GeneticNetwork`
+- add `Reporter` and `Operator` objects
+- create a metabolism context
+- simulate an `Assay`
+- upload the results
+- characterize the operator from the resulting data
+
+Below is a simplified version of that pattern based on the LOICA `Source` notebook.
+
+```{python}
+#| eval: false
+from loica import *
+from flapjack import *
+import getpass
+import matplotlib.pyplot as plt
+
+fj = Flapjack(url_base="localhost:8000")
+fj.log_in(
+    username=input("Flapjack username: "),
+    password=getpass.getpass("Password: "),
+)
+
+study = fj.create("study", name="Loica testing", description="Test study")
+dna = fj.create("dna", name="source")
+vector = fj.create("vector", name="source", dnas=dna.id)
+sfp = fj.create("signal", name="SFP", color="green")
+
+network = GeneticNetwork(vector=vector.id[0])
+reporter = Reporter(
+    name="SFP",
+    color="green",
+    degradation_rate=0,
+    init_concentration=0,
+    signal_id=sfp.id[0],
+)
+network.add_reporter(reporter)
+
+source = Source(output=reporter, rate=10)
+network.add_operator(source)
+
+plt.figure(figsize=(3, 3), dpi=150)
+network.draw()
+```
+
+Even if you do not run this immediately, several useful ideas appear here.
+
+First, the biological design is represented as a set of interacting objects rather than as one large opaque script.
+Second, the design already knows how to connect to data objects in Flapjack.
+Third, the design can be visualized and simulated before anything is built.
+
+That is exactly why a design tool matters in DBTL.
+It lets us reason about candidate systems before spending experimental effort on them.
+
+### Adding simulation context
+
+LOICA does not only define a network.
+It also defines the context in which that network operates.
+In the tutorial notebook, this is done with a simulated metabolism, samples, and an assay.
+
+```{python}
+#| eval: false
+def growth_rate(t):
+    return gompertz_growth_rate(t, 0.01, 1, 1, 0.5)
+
+
+def biomass(t):
+    return gompertz(t, 0.01, 1, 1, 0.5)
+
+
+metab = SimulatedMetabolism(biomass, growth_rate)
+
+media = fj.create("media", name="loica", description="Simulated loica media")
+strain = fj.create("strain", name="loica", description="Loica test strain")
+
+samples = []
+for _ in range(5):
+    sample = Sample(
+        genetic_network=network,
+        metabolism=metab,
+        media=media.id[0],
+        strain=strain.id[0],
+    )
+    samples.append(sample)
+
+biomass_signal = fj.create("signal", name="SOD", description="Simulated OD")
+
+assay = Assay(
+    samples,
+    n_measurements=100,
+    interval=0.24,
+    name="Loica constitutive expression",
+    description="Simulated constitutive gene generated by LOICA",
+    biomass_signal_id=biomass_signal.id[0],
+)
+
+assay.run()
+```
+
+This is a powerful computational idea.
+The same environment that stores experimental measurements can also store simulated measurements.
+That means the line between *test* and *design* becomes more fluid.
+Simulation can be used as a first-pass filter before a wet-lab experiment ever begins.
+
+### Uploading and characterizing the result
+
+A closed loop needs feedback.
+That is where characterization comes in.
+
+```{python}
+#| eval: false
+assay.upload(fj, study=study.id[0])
+
+source.characterize(
+    fj,
+    vector=vector.id,
+    media=media.id,
+    strain=strain.id,
+    signal=sfp.id,
+    biomass_signal=biomass_signal.id,
+)
+
+source.rate
+```
+
+This pattern is central to the thesis: simulate or measure behavior, store the result in Flapjack, characterize a design object, and use the resulting parameters in future designs. The thesis explicitly describes LOICA designs being parameterized from Flapjack data and then reused in later genetic network designs.
+
+## LOICA as a Python lesson
+
+LOICA is not just a domain tool.
+It is also a good software design lesson.
+
+It teaches that:
+
+- biological abstractions can be modeled as Python classes
+- simulation should be attached to meaningful domain objects
+- design objects become more useful when they connect to real data
+- standards such as SBOL let those objects leave one tool and enter another
+
+That combination of **object-oriented abstraction** and **standards-based interoperability** is one of the strongest themes in your thesis work.
+
+## Using PUDU at the build stage
+
+Design is only half the story.
+At some point, a design has to become a build plan.
+
+That translation step is often where synthetic biology workflows become messy.
+A diagram is not a protocol.
+A list of parts is not yet a robotic workflow.
+A GenBank file is not automatically enough information for assembly, transformation, or plate setup.
+
+PUDU is interesting because it treats build-stage automation as a Python problem:
+
+- define the build inputs clearly
+- encode them as structured data
+- generate instructions for a robot and a human
+- capture useful metadata while doing so
+
+The thesis describes PUDU as a build-stage tool that can use standard build plans to simulate and automate DNA assembly, transformation, and test setup, while producing metadata that can feed later stages.
+
+### A minimal Loop assembly example
+
+The thesis gives a very compact example of a PUDU assembly specification: a dictionary of parts by role, passed into a Loop assembly protocol class. That same pattern also appears in the PUDU codebase.
+
+```{python}
+#| eval: false
+from opentrons import protocol_api
+from pudu.assembly import Loop_assembly
+
+assemblies = {
+    "promoter": ["GVP0008", "GVP0010", "GVP0012", "GVP0013", "GVP0015", "GVP0016"],
+    "rbs": "B0034",
+    "cds": "sfGFP",
+    "terminator": "B0015",
+    "receiver": "Odd_1",
+}
+
+
+def run(protocol: protocol_api.ProtocolContext):
+    pudu_loop_assembly = Loop_assembly(assemblies=[assemblies])
+    pudu_loop_assembly.run(protocol)
+```
+
+This is a deceptively important example.
+The build plan is encoded as a Python dictionary.
+That means we can generate it programmatically, validate it, transform it, version-control it, and connect it to standards-based descriptions produced earlier in the workflow.
+
+### Simulating a protocol before running it
+
+The PUDU README recommends simulating protocols locally before transferring the script to the OT-2, for example with `opentrons_simulate ./scripts/run_Loop_assembly.py`.
+
+That is a wonderful engineering lesson for students.
+Before we run a biological build, we can run a **software build** of the protocol itself.
+
+In other words, the build stage has its own design-test cycle.
+
+### PUDU and human-readable output
+
+One subtle but practical detail from both the thesis and the repository is that PUDU is not only about robot execution.
+It also produces instructions that humans can use for deck setup, labeling, and verification.
+
+That matters because many real labs are hybrid environments.
+Some steps are automated and some are still manual.
+Good software should support that reality rather than assume a perfectly robotic lab.
+
+### A plate-setup style example
+
+The thesis also describes using PUDU to turn a set of transformed samples into a plate layout for kinetic measurements.
+A compact version looks like this:
+
+```{python}
+#| eval: false
+from opentrons import protocol_api
+from pudu.transform import Plate_samples
+
+
+def run(protocol: protocol_api.ProtocolContext):
+    pudu_plate_samples = Plate_samples(
+        samples=["s1", "s2", "s3", "s4", "s5", "s6"],
+        starting_slot=13,
+    )
+    pudu_plate_samples.run(protocol)
+```
+
+This is a good reminder that *build* and *test setup* are often tightly coupled.
+If we do not track where samples go, what they contain, and how they were prepared, then the test stage becomes difficult to analyze later.
+
+## PUDU as a Python lesson
+
+PUDU teaches several important software lessons:
+
+- protocols become easier to reuse when they are parameterized by structured inputs
+- robotic automation is easier to trust when it can be simulated first
+- metadata capture is not an afterthought; it is part of the protocol design
+- a good automation tool should help both humans and machines
+
+This is exactly why the thesis places so much emphasis on standard build plans and metadata representation.
+
+## Using Flapjack for test and learn
+
+The test stage is where designs meet evidence.
+But raw measurements alone are not enough.
+We also need to know:
+
+- what construct was measured
+- in what host strain
+- in what medium
+- under what inducer conditions
+- in which assay
+- with which reporter and biomass signals
+
+That is what makes Flapjack so important in this ecosystem.
+It does not just store numbers.
+It stores measurements **in context**.
+
+The Flapjack paper emphasizes that characterization depends on connecting measurement data with metadata and part composition, and that the tool provides an interactive frontend, a REST API, and a Python package for external integration.
+
+### Connecting with `pyFlapjack`
+
+The `pyFlapjack` notebook examples use a simple but expressive pattern:
+
+- create a `Flapjack` client
+- log in
+- retrieve studies, vectors, media, strains, and signals
+- request measurements or analyzed data as data frames
+- plot or further analyze the results in Python
+
+```{python}
+#| eval: false
+import getpass
+from flapjack import Flapjack
+
+user = input("Flapjack username: ")
+passwd = getpass.getpass()
+
+fj = Flapjack("flapjack.rudge-lab.org:8000")
+fj.log_in(username=user, password=passwd)
+
+study = fj.get("study", name="Context effects")
+vector = fj.get("vector", name="pAAA")
+media = fj.get("media", name="M9-glucose")
+strain = fj.get("strain", name="MG1655z1")
+od = fj.get("signal", name="OD")
+
+raw = fj.measurements(
+    study=study.id,
+    media=media.id,
+    strain=strain.id,
+    vector=vector.id,
+)
+
+analysis = fj.analysis(
+    study=study.id,
+    media=media.id,
+    strain=strain.id,
+    vector=vector.id,
+    type="Background Correct",
+    biomass_signal=od.id,
+)
+```
+
+For teaching, this is a beautiful example because the return values are data frames.
+That means students can move directly into the general Python data stack they already know:
+
+- `pandas` for wrangling
+- `matplotlib` or `plotly` for plots
+- `numpy` for numerical work
+- `scipy` for fitting and inference
+
+### Plotting measurements and analysis results
+
+The notebook examples also show that Flapjack can either return data frames for custom plotting or create more opinionated plots directly.
+
+```{python}
+#| eval: false
+raw[raw.Signal == "OD"].plot(x="Time", y="Measurement", style=".")
+
+fig = fj.plot(
+    assay=study.id,
+    media=media.id,
+    normalize="None",
+    subplots="Signal",
+    markers="Vector",
+    plot="Mean",
+)
+fig.show()
+```
+
+And for analysis-derived summaries:
+
+```{python}
+#| eval: false
+cfp = fj.get("signal", search="CFP")
+
+fig = fj.plot(
+    assay=study.id,
+    media=media.id,
+    type="Mean Expression",
+    biomass_signal=od.id,
+    ref_signal=cfp.id,
+    normalize="None",
+    subplots="Signal",
+    markers="Vector",
+    plot="Mean",
+)
+fig.show()
+```
+
+The thesis chapter on DBTL describes the same general pattern: experimental data are uploaded to Flapjack, inspected visually, analyzed using the inverse characterization method, summarized, and then used to characterize components for the next design round.
+
+### Getting tabular outputs for further learning
+
+One of the strongest computational ideas in Flapjack is that analysis results can be requested as tables rather than only viewed in a browser.
+That means the learn stage can become programmable.
+
+```{python}
+#| eval: false
+df = fj.analysis(
+    assay=[study.id[0]],
+    media=media.id,
+    type="Alpha",
+    biomass_signal=od.id,
+    ref_signal=cfp.id,
+)
+
+df.head()
+```
+
+Once the result is a tidy data frame, the rest of the learn stage becomes ordinary Python.
+We can rank variants, compare conditions, fit curves, build predictors, or feed summary parameters back into LOICA.
+
+### Flapjack as the bridge between test and design
+
+This is the central point.
+Flapjack is not only a place to *look at plots*.
+It is part of the feedback architecture.
+
+Your thesis explicitly describes using Flapjack analysis tools to inspect raw and processed data, compute mean expression and biomass, and then use LOICA to characterize source operators from the resulting data, closing the cycle.
+
+That is exactly what the learn stage should do.
+It should not end in a figure.
+It should end in an updated design model.
+
+## A worked conceptual loop
+
+It helps to summarize the whole workflow as one conceptual program:
+
+```{python}
+cycle = [
+    "1. Define candidate genetic networks in LOICA",
+    "2. Export or translate design information into SBOL-aware build representations",
+    "3. Use PUDU to simulate or execute assembly and test setup",
+    "4. Upload simulated or experimental measurements to Flapjack",
+    "5. Query and analyze results with pyFlapjack",
+    "6. Characterize model components and update the next LOICA design",
+]
+cycle
+```
+
+That list is the heart of the chapter.
+
+Notice that the same high-level logic works in all three modes:
+
+- all-software simulation
+- software plus manual wet-lab build
+- software plus robotic build
+
+The details change, but the dataflow stays recognizable.
+
+## Why standards matter here
+
+Without standards, each handoff between tools becomes custom glue code.
+That is expensive, fragile, and hard to maintain.
+
+The thesis repeatedly emphasizes that standards-aware representations, especially SBOL, are what make these tools modular and connectable across the workflow. The same work also notes that standardized inputs and outputs are essential to reducing gaps between DBTL stages.
+
+That is why the previous chapter belongs directly before this one.
+SBOL is not just a documentation format.
+It is part of the software architecture that allows LOICA, PUDU, Flapjack, and related tools to exchange meaningful information.
+
+## A practical teaching strategy
+
+One useful way to teach this chapter is to present the tools in increasing order of laboratory commitment.
+
+### 1. Start with simulated DBTL
+
+Students can first learn the loop without a wet lab:
+
+- create a small LOICA design
+- simulate an assay
+- store or inspect the resulting measurements
+- compute a summary from the simulated data
+
+This makes DBTL concrete without requiring equipment.
+
+### 2. Add real experimental data
+
+Next, students can use exported plate-reader data and metadata:
+
+- upload or query measurements in Flapjack
+- compare raw and analyzed traces
+- derive simple metrics such as mean expression or fitted parameters
+
+Now the *test* and *learn* stages become real.
+
+### 3. Add automated build concepts
+
+Finally, students can inspect how a design becomes a robotic protocol:
+
+- define assemblies as structured data
+- simulate the protocol
+- inspect plate layouts or reagent mappings
+- reason about metadata capture and reproducibility
+
+Now the whole loop is visible.
+
+## What students should learn from this chapter
+
+Biologically, students should see that DBTL is the core organizing workflow of engineering biology.
+
+Computationally, they should learn five deeper lessons.
+
+### 1. A workflow is a chain of data structures
+
+Each stage of DBTL should produce artifacts that another stage can consume.
+That is a software design problem, not only a biological one.
+
+### 2. Abstractions matter
+
+LOICA works because it introduces a design abstraction for genetic networks.
+PUDU works because it introduces a protocol abstraction for automated build.
+Flapjack works because it introduces a data model for assay measurements and metadata.
+
+### 3. Metadata is part of the science
+
+If we cannot reconstruct what was measured, under which conditions, and from which design, then the learn stage becomes weak.
+
+### 4. Simulation and experiment should talk to each other
+
+A mature workflow does not keep model code and assay data in separate worlds.
+It lets them update one another.
+
+### 5. Standards make software ecosystems possible
+
+A single tool can be useful.
+A connected set of tools can change how a lab works.
+
+## Minimal installation notes
+
+If you want to experiment with these tools directly, the package names are:
+
+```{bash}
+pip install loica
+pip install pudupy
+pip install pyflapjack
+```
+
+The official package pages list these names on PyPI, while the repository documentation points readers to notebooks and tutorials for learning the APIs.
+
+Depending on your environment, you may also need:
+
+- an accessible Flapjack instance
+- credentials for API access
+- Opentrons tooling if you want to simulate or run PUDU protocols on an OT-2
+
+## Exercises
+
+1. Write a Python dictionary that represents a tiny DBTL workflow with four keys: `design`, `build`, `test`, and `learn`. What artifact would you store at each key?
+
+2. Take one of the LOICA examples in this chapter and identify which objects represent **structure**, which represent **context**, and which represent **measurement**.
+
+3. Modify the PUDU assembly dictionary to represent three promoters instead of six. How would you generate such dictionaries automatically from a design table in `pandas`?
+
+4. Imagine you already have a `pyFlapjack` data frame with columns `Vector`, `Signal`, and `Expression`. Write a short `pandas` snippet to rank the top three constructs by expression.
+
+5. Sketch a function called `next_round_designs(results_df)` that would take learning-stage results and propose which constructs to build next.
+
+## Closing thought
+
+DBTL is often drawn as a circle.
+
+For software, though, it is better to think of it as a **loop with memory**.
+Each cycle should leave behind better metadata, better models, better reusable code, and better structured knowledge for the next round.
+
+That is what makes the combination of LOICA, PUDU, and Flapjack so instructive.
+They do not just occupy different DBTL stages.
+They show how Python, standards, metadata, and automation can work together to make the loop tighter, more reproducible, and more genuinely engineerable.

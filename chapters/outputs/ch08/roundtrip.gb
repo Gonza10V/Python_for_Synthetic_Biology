@@ -1,0 +1,14 @@
+LOCUS       toy_plasmid               24 bp    DNA     linear   UNK 01-JAN-1980
+DEFINITION  toy plasmid.
+ACCESSION   toy_plasmid
+VERSION     toy_plasmid
+KEYWORDS    .
+SOURCE      .
+  ORGANISM  .
+            .
+FEATURES             Location/Qualifiers
+     CDS             1..24
+                     /label="GFP"
+ORIGIN
+        1 atggtgagca agggcgagga gtaa
+//
