@@ -7,7 +7,7 @@ book:
   author: "Gonzalo Vidal"
   page-navigation: true
   search: true
-  repo-url: https://github.com/Gonza10V/python-for-synthetic-biology
+  repo-url: https://github.com/Gonza10V/Python_for_Synthetic_Biology
   repo-actions: [edit, issue]
   chapters:
     - index.qmd

@@ -3,6 +3,11 @@ title: "Python for Synthetic Biology"
 subtitle: "Executable workflows for biological engineering"
 ---
 
+::: {.content-visible when-format="html"}
+[Read on GitHub](https://github.com/Gonza10V/Python_for_Synthetic_Biology){.btn .btn-primary .me-2}
+[Download PDF](python-for-synthetic-biology.pdf){.btn .btn-outline-primary}
+:::
+
 ```{python}
 message = "Welcome to Python for Synthetic Biology"
 message
@@ -10,10 +15,10 @@ message
 
 This book teaches Python through the workflows, abstractions, and software patterns that matter in synthetic biology.
 
-Instead of learning programming in the abstract and only later trying to apply it to biology, we will build intuition directly from synthetic biology problems:
+Instead of learning programming in the abstract and only later trying to apply it to biology, we build intuition directly from synthetic biology problems:
 
 - representing DNA sequences and annotations
-- working with experimental measurements
+- working with experimental measurements in tidy format
 - modeling gene expression and regulatory circuits
 - structuring design-build-test-learn workflows
 - learning from real open-source tools developed in research labs
@@ -22,7 +27,7 @@ Instead of learning programming in the abstract and only later trying to apply i
 
 Synthetic biology increasingly depends on software. We design parts, assemble circuits, manage metadata, analyze experiments, run simulations, exchange models, and automate lab workflows through code. Yet many trainees still learn these pieces in fragments.
 
-This book is an attempt to provide a coherent path.
+This book is an attempt to provide a coherent path from first Python scripts to research-grade computational thinking.
 
 It is designed for readers who want to:
 
