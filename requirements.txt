@@ -1,5 +1,6 @@
 biopython
 jupyter
+jupyter-cache
 matplotlib
 networkx
 numpy
@@ -8,4 +9,3 @@ sbol3
 sbol-utilities
 loica
 pyflapjack
-
