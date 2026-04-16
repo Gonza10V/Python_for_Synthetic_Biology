@@ -483,6 +483,7 @@ ax.set_ylim([-25, 25])
 ax.set_aspect("equal")
 ax.axis("off")
 fig.tight_layout()
+plt.show()
 ```
 
 This representation is more manual than VisBOL, but it is also more flexible.
