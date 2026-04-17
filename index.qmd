@@ -5,7 +5,7 @@ subtitle: "Executable workflows for biological engineering"
 
 ::: {.content-visible when-format="html"}
 [Read on GitHub](https://github.com/Gonza10V/Python_for_Synthetic_Biology){.btn .btn-primary .me-2}
-[Download PDF](python-for-synthetic-biology.pdf){.btn .btn-outline-primary}
+[Download PDF](https://gonza10v.github.io/Python_for_Synthetic_Biology/Python-for-Synthetic-Biology.pdf){.btn .btn-outline-primary}
 :::
 
 ```{python}
